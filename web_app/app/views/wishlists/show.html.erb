@@ -1,0 +1,208 @@
+<div class="container-fluid py-4">
+  <% unless @is_public_view %>
+    <div class="mb-3">
+      <%= link_to wishlists_path, class: 'btn btn-link text-decoration-none' do %>
+        <i class="bi bi-arrow-left"></i> Назад к списку
+      <% end %>
+    </div>
+  <% end %>
+  
+  <!-- DEBUG: Отладочная информация -->
+  <% if Rails.env.development? %>
+    <div class="alert alert-info mb-3">
+      <strong>DEBUG:</strong><br>
+      Wishlist telegram_id: <%= @wishlist.telegram_id.inspect %><br>
+      Current telegram_id: <%= current_telegram_id.inspect %><br>
+      Is owner: <%= @is_owner.inspect %><br>
+      Is public: <%= @is_public_view.inspect %>
+    </div>
+  <% end %>
+  
+  <div class="card shadow-sm border-0 mb-4 neon-glow">
+    <div class="card-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2 class="mb-0 neon-text">
+          <span class="me-2 pulse">🎁</span><%= @wishlist.name %>
+        </h2>
+        <% if @is_owner && !@is_public_view %>
+          <div class="d-flex flex-wrap gap-2">
+            <%= link_to edit_wishlist_path(@wishlist), class: 'btn btn-light btn-sm' do %>
+              <i class="bi bi-pencil"></i> <span class="d-none d-sm-inline">Редактировать</span>
+            <% end %>
+            <%= button_to @wishlist, method: :delete, 
+                data: { turbo_confirm: 'Удалить вишлист?' }, 
+                class: 'btn btn-light btn-sm' do %>
+              <i class="bi bi-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          <p class="mb-2 text-white">
+            <strong class="text-white"><i class="bi bi-calendar-event"></i> Дата события:</strong>
+            <span class="ms-2 text-white"><%= @wishlist.event_date.strftime('%d.%m.%Y') %></span>
+          </p>
+          <% days_left = (@wishlist.event_date - Date.today).to_i %>
+          <% if days_left > 0 %>
+            <p class="text-success mb-0 text-white">
+              <i class="bi bi-clock"></i> Осталось <%= days_left %> <%= pluralize(days_left, 'день', 'дня', 'дней') %>
+            </p>
+          <% elsif days_left == 0 %>
+            <p class="text-danger fw-bold mb-0 text-white">
+              <i class="bi bi-star-fill"></i> Сегодня!
+            </p>
+          <% end %>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+          <% if @is_owner && !@is_public_view %>
+            <button class="btn btn-success w-100 w-md-auto" onclick="shareWishlist(<%= @wishlist.id %>)">
+              <i class="bi bi-share"></i> <span class="d-none d-sm-inline">Поделиться вишлистом</span><span class="d-sm-none">Поделиться</span>
+            </button>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0 text-white">
+      <span class="me-2">🎁</span>Подарки
+      <span class="badge bg-primary"><%= @gifts.count %></span>
+    </h3>
+    <% if @is_owner && !@is_public_view %>
+      <%= link_to new_wishlist_gift_path(@wishlist), class: 'btn btn-primary' do %>
+        <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Добавить подарок</span><span class="d-sm-none">Добавить</span>
+      <% end %>
+    <% elsif Rails.env.development? && !@is_public_view %>
+      <!-- DEBUG: Показываем кнопку даже если @is_owner false -->
+      <%= link_to new_wishlist_gift_path(@wishlist), class: 'btn btn-primary' do %>
+        <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Добавить подарок (DEBUG)</span><span class="d-sm-none">Добавить</span>
+      <% end %>
+    <% end %>
+  </div>
+  
+  <% if @gifts.any? %>
+    <div class="row g-4">
+      <% @gifts.each do |gift| %>
+        <div class="col-lg-4 col-md-6">
+          <div class="card h-100 shadow-sm border-0 hover-card neon-glow">
+            <% if gift.image_url.present? %>
+              <img src="<%= gift.image_url %>" class="card-img-top" alt="<%= gift.name %>" 
+                   style="height: 250px; object-fit: cover;">
+            <% else %>
+              <div class="card-img-top d-flex align-items-center justify-content-center" 
+                   style="height: 250px; background: rgba(26, 11, 46, 0.5);">
+                <i class="bi bi-gift empty-state-icon" style="font-size: 4rem;"></i>
+              </div>
+            <% end %>
+            <div class="card-body d-flex flex-column">
+              <h5 class="card-title fw-bold text-white"><%= gift.name %></h5>
+              
+              <% if gift.price.present? %>
+                <p class="card-text mb-2 text-white">
+                  <span class="badge bg-success fs-6">
+                    💰 <%= number_with_delimiter(gift.price, delimiter: ' ') %> руб.
+                  </span>
+                </p>
+              <% end %>
+              
+              <% if gift.link_url.present? %>
+                <p class="card-text mb-2 text-white">
+                  <a href="<%= gift.link_url %>" target="_blank" 
+                     class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-link-45deg"></i> Открыть ссылку
+                  </a>
+                </p>
+              <% end %>
+              
+              <% if gift.additional_info.present? %>
+                <p class="card-text small flex-grow-1 text-white" style="color: #ffffff !important;">
+                  <%= gift.additional_info %>
+                </p>
+              <% end %>
+              
+              <% if @is_owner && !@is_public_view %>
+                <div class="btn-group btn-group-sm mt-auto w-100" role="group">
+                  <%= link_to edit_wishlist_gift_path(@wishlist, gift), 
+                      class: 'btn btn-outline-secondary' do %>
+                    <i class="bi bi-pencil"></i> <span class="d-none d-sm-inline">Редактировать</span>
+                  <% end %>
+                  <%= button_to [@wishlist, gift], method: :delete, 
+                      data: { turbo_confirm: 'Удалить подарок?' }, 
+                      class: 'btn btn-outline-danger' do %>
+                    <i class="bi bi-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="text-center py-5">
+      <div class="mb-4">
+        <i class="bi bi-gift empty-state-icon" style="font-size: 5rem;"></i>
+      </div>
+      <h4 class="mb-3 text-white">Подарков пока нет</h4>
+      <% if @is_owner && !@is_public_view %>
+        <p class="mb-4 text-white">Добавьте первый подарок в вишлист!</p>
+        <%= link_to new_wishlist_gift_path(@wishlist), class: 'btn btn-primary' do %>
+          <i class="bi bi-plus-circle"></i> Добавить подарок
+        <% end %>
+      <% elsif Rails.env.development? && !@is_public_view %>
+        <!-- DEBUG: Показываем кнопку даже если @is_owner false -->
+        <p class="mb-4 text-white">DEBUG: Добавьте первый подарок в вишлист!</p>
+        <%= link_to new_wishlist_gift_path(@wishlist), class: 'btn btn-primary' do %>
+          <i class="bi bi-plus-circle"></i> Добавить подарок (DEBUG)
+        <% end %>
+      <% else %>
+        <p class="text-white">В этом вишлисте пока нет подарков.</p>
+      <% end %>
+    </div>
+  <% end %>
+</div>
+
+<script>
+function shareWishlist(wishlistId) {
+  const botUsername = '<%= ENV['BOT_USERNAME'] || 'my_wishlists_bot' %>';
+  const shareUrl = `https://t.me/${botUsername}?start=${wishlistId}`;
+  
+  if (navigator.share) {
+    navigator.share({
+      title: '🎁 Посмотри мой вишлист!',
+      text: 'Посмотри мой вишлист в Telegram боте!',
+      url: shareUrl
+    }).catch(() => {
+      copyToClipboard(shareUrl);
+    });
+  } else {
+    copyToClipboard(shareUrl);
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+    alert.style.zIndex = '9999';
+    alert.innerHTML = '<i class="bi bi-check-circle"></i> Ссылка скопирована! Отправьте её друзьям в Telegram.<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    document.body.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+  });
+}
+</script>
+
+<style>
+.hover-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hover-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+</style>

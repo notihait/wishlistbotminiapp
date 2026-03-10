@@ -1,0 +1,25 @@
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card shadow-sm border-0 neon-glow">
+        <div class="card-header">
+          <h2 class="mb-0 neon-text">
+            <span class="me-2 pulse">🎁</span>Добавить подарок
+          </h2>
+          <p class="mb-0 mt-2 text-white">
+            Вишлист: <strong class="text-white"><%= @wishlist.name %></strong>
+          </p>
+        </div>
+        <div class="card-body p-4">
+          <%= render 'form', gift: @gift, wishlist: @wishlist %>
+        </div>
+      </div>
+      
+      <div class="text-center mt-3">
+        <%= link_to @wishlist, class: 'btn btn-link text-decoration-none' do %>
+          <i class="bi bi-arrow-left"></i> Назад к вишлисту
+        <% end %>
+      </div>
+    </div>
+  </div>
+</div>

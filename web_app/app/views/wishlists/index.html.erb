@@ -1,0 +1,126 @@
+<div class="container-fluid py-4">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="display-5 fw-bold neon-text">
+          <span class="me-2 pulse">🎁</span>Мои Вишлисты
+        </h1>
+        <%= link_to new_wishlist_path, class: 'btn btn-primary btn-lg shadow-sm' do %>
+          <i class="bi bi-plus-circle"></i> Создать вишлист
+        <% end %>
+      </div>
+    </div>
+  </div>
+  
+  <% if @wishlists.any? %>
+    <div class="row g-4">
+      <% @wishlists.each do |wishlist| %>
+        <div class="col-lg-4 col-md-6">
+          <div class="card h-100 shadow-sm border-0 hover-card neon-glow">
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="card-title fw-bold mb-0 text-white">
+                  <%= wishlist.name %>
+                </h5>
+                <span class="badge bg-primary rounded-pill">
+                  <%= wishlist.gifts.count %> 🎁
+                </span>
+              </div>
+              
+              <div class="mb-3">
+                <div class="d-flex align-items-center text-white">
+                  <i class="bi bi-calendar-event me-2"></i>
+                  <span class="text-white"><%= wishlist.event_date.strftime('%d.%m.%Y') %></span>
+                </div>
+                <% days_left = (wishlist.event_date - Date.today).to_i %>
+                <% if days_left > 0 %>
+                  <small class="text-success">
+                    <i class="bi bi-clock"></i> Осталось <%= days_left %> <%= pluralize(days_left, 'день', 'дня', 'дней') %>
+                  </small>
+                <% elsif days_left == 0 %>
+                  <small class="text-danger fw-bold">
+                    <i class="bi bi-star-fill"></i> Сегодня!
+                  </small>
+                <% end %>
+              </div>
+              
+              <div class="mt-auto">
+                <div class="btn-group w-100" role="group">
+                  <%= link_to wishlist, class: 'btn btn-outline-primary' do %>
+                    <i class="bi bi-eye"></i> <span class="d-none d-sm-inline">Открыть</span>
+                  <% end %>
+                  <% if wishlist_owner?(wishlist) %>
+                    <%= link_to edit_wishlist_path(wishlist), class: 'btn btn-outline-secondary' do %>
+                      <i class="bi bi-pencil"></i> <span class="d-none d-sm-inline">Редактировать</span>
+                    <% end %>
+                    <%= button_to wishlist, method: :delete, 
+                        data: { turbo_confirm: 'Удалить вишлист?' }, 
+                        class: 'btn btn-outline-danger' do %>
+                      <i class="bi bi-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+                    <% end %>
+                  <% end %>
+                </div>
+                <% if wishlist_owner?(wishlist) %>
+                  <button class="btn btn-success w-100 mt-2" onclick="shareWishlist(<%= wishlist.id %>)">
+                    <i class="bi bi-share"></i> Поделиться
+                  </button>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="text-center py-5">
+      <div class="mb-4">
+        <i class="bi bi-gift empty-state-icon" style="font-size: 5rem;"></i>
+      </div>
+      <h3 class="mb-3 text-white">Вишлистов пока нет</h3>
+      <p class="mb-4 text-white">Создайте свой первый вишлист и начните собирать подарки!</p>
+    </div>
+  <% end %>
+</div>
+
+<script>
+function shareWishlist(wishlistId) {
+  const botUsername = '<%= ENV['BOT_USERNAME'] || 'my_wishlists_bot' %>';
+  const shareUrl = `https://t.me/${botUsername}?start=${wishlistId}`;
+  
+  if (navigator.share) {
+    navigator.share({
+      title: '🎁 Посмотри мой вишлист!',
+      text: 'Посмотри мой вишлист в Telegram боте!',
+      url: shareUrl
+    }).catch(() => {
+      // Fallback если пользователь отменил
+      copyToClipboard(shareUrl);
+    });
+  } else {
+    copyToClipboard(shareUrl);
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // Показываем уведомление
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+    alert.style.zIndex = '9999';
+    alert.innerHTML = '<i class="bi bi-check-circle"></i> Ссылка скопирована! Отправьте её друзьям в Telegram.<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    document.body.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+  });
+}
+</script>
+
+<style>
+.hover-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hover-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+</style>

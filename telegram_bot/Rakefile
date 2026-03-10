@@ -1,0 +1,73 @@
+require_relative 'config/environment'
+
+namespace :db do
+  desc "Create database"
+  task :create do
+    require 'active_record'
+    ActiveRecord::Base.establish_connection(
+      adapter: 'postgresql',
+      host: ENV.fetch('DB_HOST', 'localhost'),
+      port: ENV.fetch('DB_PORT', 5432),
+      database: 'postgres',
+      username: ENV.fetch('DB_USER', 'postgres'),
+      password: ENV.fetch('DB_PASSWORD', 'postgres')
+    )
+    ActiveRecord::Base.connection.create_database(ENV.fetch('DB_NAME', 'wishlist_bot_db'))
+    puts "Database created"
+  end
+
+  desc "Run migrations"
+  task :migrate do
+    Database.connect
+    ActiveRecord::MigrationContext.new('db/migrate').migrate
+    puts "Migrations completed"
+  end
+
+  desc "Rollback last migration"
+  task :rollback do
+    Database.connect
+    if ActiveRecord::VERSION::MAJOR >= 7
+      ActiveRecord::MigrationContext.new('db/migrate', ActiveRecord::Base.connection.schema_migration).rollback(1)
+    else
+      ActiveRecord::MigrationContext.new('db/migrate').rollback(1)
+    end
+    puts "Rollback completed"
+  end
+
+  namespace :test do
+    desc "Create test database"
+    task :create do
+      require 'dotenv'
+      Dotenv.load('.env.test')
+      require 'active_record'
+      ActiveRecord::Base.establish_connection(
+        adapter: 'postgresql',
+        host: ENV.fetch('DB_HOST', 'localhost'),
+        port: ENV.fetch('DB_PORT', 5432),
+        database: 'postgres',
+        username: ENV.fetch('DB_USER', 'postgres'),
+        password: ENV.fetch('DB_PASSWORD', 'postgres')
+      )
+      ActiveRecord::Base.connection.create_database(ENV.fetch('DB_NAME', 'wishlist_bot_test_db'))
+      puts "Test database created"
+    end
+
+    desc "Run test migrations"
+    task :migrate do
+      require 'dotenv'
+      Dotenv.load('.env.test')
+      Database.connect
+      ActiveRecord::MigrationContext.new('db/migrate').migrate
+      puts "Test migrations completed"
+    end
+  end
+end
+
+desc "Run tests"
+task :test => :spec
+
+desc "Run specs"
+task :spec do
+  sh "bundle exec rspec"
+end
+

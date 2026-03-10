@@ -1,0 +1,34 @@
+<%= form_with model: wishlist, local: true, class: 'needs-validation', novalidate: true, html: { id: 'wishlist-form', onsubmit: 'return ensureTelegramId(this)' } do |form| %>
+  <% if wishlist.errors.any? %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <h5><i class="bi bi-exclamation-triangle"></i> Ошибки:</h5>
+      <ul class="mb-0">
+        <% wishlist.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% end %>
+  
+  <%# Скрытое поле для telegram_id - будет заполнено JavaScript %>
+  <%= hidden_field_tag :telegram_id, '', id: 'telegram_id_field' %>
+  
+  <div class="mb-4">
+    <%= form.label :name, "Название вишлиста", class: 'form-label fw-bold' %>
+    <%= form.text_field :name, class: 'form-control form-control-lg neon-border', required: true, 
+        placeholder: 'Например: День рождения' %>
+    <div class="form-text">✨ Придумайте название для вашего вишлиста</div>
+  </div>
+  
+  <div class="mb-4">
+    <%= form.label :event_date, "Дата события", class: 'form-label fw-bold' %>
+    <%= form.date_field :event_date, class: 'form-control form-control-lg neon-border', required: true %>
+    <div class="form-text">📅 Выберите дату события, о котором нужно напомнить</div>
+  </div>
+  
+  <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+    <%= link_to 'Отмена', wishlists_path, class: 'btn btn-secondary btn-lg me-md-2' %>
+    <%= form.submit 'Сохранить', class: 'btn btn-primary btn-lg' %>
+  </div>
+<% end %>

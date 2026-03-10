@@ -1,0 +1,51 @@
+<%= form_with model: [wishlist, gift], local: true, class: 'needs-validation', novalidate: true do |form| %>
+  <% if gift.errors.any? %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <h5><i class="bi bi-exclamation-triangle"></i> Ошибки:</h5>
+      <ul class="mb-0">
+        <% gift.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% end %>
+  
+  <div class="mb-4">
+    <%= form.label :name, "Название подарка", class: 'form-label fw-bold' %>
+    <%= form.text_field :name, class: 'form-control form-control-lg neon-border', required: true, 
+        placeholder: 'Например: Книга "Гарри Поттер"' %>
+  </div>
+  
+  <div class="row">
+    <div class="col-md-6 mb-4">
+      <%= form.label :price, "Цена (руб.)", class: 'form-label fw-bold' %>
+      <%= form.number_field :price, step: 0.01, class: 'form-control form-control-lg neon-border', 
+          placeholder: '0.00' %>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+      <%= form.label :link_url, "Ссылка на подарок", class: 'form-label fw-bold' %>
+      <%= form.url_field :link_url, class: 'form-control form-control-lg neon-border', 
+          placeholder: 'https://example.com/gift' %>
+    </div>
+  </div>
+  
+  <div class="mb-4">
+    <%= form.label :image_url, "URL изображения", class: 'form-label fw-bold' %>
+    <%= form.url_field :image_url, class: 'form-control form-control-lg neon-border', 
+        placeholder: 'https://example.com/image.jpg' %>
+    <div class="form-text">🖼️ Вставьте ссылку на изображение подарка</div>
+  </div>
+  
+  <div class="mb-4">
+    <%= form.label :additional_info, "Дополнительная информация", class: 'form-label fw-bold' %>
+    <%= form.text_area :additional_info, class: 'form-control neon-border', rows: 4, 
+        placeholder: 'Любая дополнительная информация о подарке...' %>
+  </div>
+  
+  <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+    <%= link_to 'Отмена', wishlist, class: 'btn btn-secondary btn-lg me-md-2' %>
+    <%= form.submit 'Сохранить', class: 'btn btn-primary btn-lg' %>
+  </div>
+<% end %>

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Web App" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= yield :head %>
+
+    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
+    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icon.png">
+
+    <%# Includes all stylesheet files in app/assets/stylesheets %>
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body>
+    <div class="container-fluid py-4">
+      <% if notice %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="bi bi-check-circle-fill me-2"></i><%= notice %>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
+      <% end %>
+      <%= yield %>
+    </div>
+          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+          <script>
+            // Получаем telegram_id из Telegram Web App и сохраняем в cookie
+            let currentTelegramId = null;
+            
+            function setTelegramId(telegramId) {
+              if (!telegramId) return;
+              
+              currentTelegramId = telegramId;
+              
+              // Сохраняем в cookie для использования на сервере
+              document.cookie = `telegram_id=${telegramId}; path=/; max-age=31536000; SameSite=Lax`;
+              
+              // Устанавливаем значение в скрытое поле telegram_id
+              const telegramIdField = document.getElementById('telegram_id_field');
+              if (telegramIdField) {
+                telegramIdField.value = telegramId;
+              }
+              
+              // Добавляем telegram_id в скрытое поле во все формы
+              document.querySelectorAll('form').forEach(form => {
+                let hiddenInput = form.querySelector('input[name="telegram_id"]');
+                if (!hiddenInput) {
+                  hiddenInput = document.createElement('input');
+                  hiddenInput.type = 'hidden';
+                  hiddenInput.name = 'telegram_id';
+                  hiddenInput.value = telegramId;
+                  form.appendChild(hiddenInput);
+                } else {
+                  hiddenInput.value = telegramId;
+                }
+              });
+              
+              // Добавляем telegram_id в параметры всех ссылок
+              document.querySelectorAll('a[href]').forEach(link => {
+                try {
+                  const url = new URL(link.href, window.location.origin);
+                  if (url.origin === window.location.origin && !url.searchParams.has('telegram_id')) {
+                    url.searchParams.set('telegram_id', telegramId);
+                    link.href = url.toString();
+                  }
+                } catch (e) {
+                  // Игнорируем ошибки для внешних ссылок
+                }
+              });
+            }
+            
+            // Функция для получения telegram_id из Telegram Web App
+            function getTelegramIdFromWebApp() {
+              if (window.Telegram && window.Telegram.WebApp) {
+                const tg = window.Telegram.WebApp;
+                tg.ready();
+                tg.expand();
+                
+                const user = tg.initDataUnsafe?.user;
+                if (user && user.id) {
+                  return user.id.toString();
+                }
+              }
+              return null;
+            }
+            
+            // Функция для получения cookie
+            function getCookie(name) {
+              const value = `; ${document.cookie}`;
+              const parts = value.split(`; ${name}=`);
+              if (parts.length === 2) return parts.pop().split(';').shift();
+              return null;
+            }
+            
+            // Сохраняем telegram_id на сервер при загрузке страницы
+            function saveTelegramIdToServer(telegramId) {
+              if (!telegramId) return;
+              
+              const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+              
+              // Отправляем на сервер для сохранения в сессию
+              fetch('/telegram/save_id', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': csrfToken || '',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ telegram_id: telegramId }),
+                credentials: 'same-origin'
+              }).then(response => {
+                if (response.ok) {
+                  return response.json();
+                } else {
+                  throw new Error('Failed to save');
+                }
+              }).then(data => {
+                if (data.status === 'ok') {
+                  setTelegramId(telegramId);
+                }
+              }).catch(error => {
+                // Игнорируем ошибки, но продолжаем работу
+              });
+            }
+            
+            // Пытаемся получить telegram_id при загрузке страницы
+            let telegramId = null;
+            
+            // 1. Проверяем URL параметры (самый надежный способ - бот передает это)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlTelegramId = urlParams.get('telegram_id');
+            if (urlTelegramId && urlTelegramId.match(/^\d+$/)) {
+              telegramId = urlTelegramId;
+            }
+            
+            // 2. Пытаемся получить из Telegram Web App
+            if (!telegramId) {
+              telegramId = getTelegramIdFromWebApp();
+            }
+            
+            // 3. Если не получили, проверяем cookie
+            if (!telegramId) {
+              telegramId = getCookie('telegram_id');
+            }
+            
+            // Сохраняем на сервер СРАЗУ при загрузке страницы
+            if (telegramId) {
+              currentTelegramId = telegramId;
+              window.currentTelegramId = telegramId;
+              // Сохраняем синхронно через форму, чтобы гарантировать сохранение
+              saveTelegramIdToServerSync(telegramId);
+              // И асинхронно через fetch
+              saveTelegramIdToServer(telegramId);
+            }
+            
+            // Функция для добавления telegram_id в ссылки
+            function addTelegramIdToLinks() {
+              const tgId = currentTelegramId || window.currentTelegramId || getCookie('telegram_id') || getTelegramIdFromWebApp() || urlParams.get('telegram_id');
+              if (tgId) {
+                document.querySelectorAll('a[href]').forEach(link => {
+                  try {
+                    const url = new URL(link.href, window.location.origin);
+                    if (url.origin === window.location.origin && !url.searchParams.has('telegram_id')) {
+                      url.searchParams.set('telegram_id', tgId);
+                      link.href = url.toString();
+                    }
+                  } catch (e) {
+                    // Игнорируем ошибки для внешних ссылок
+                  }
+                });
+              }
+            }
+            
+            // Добавляем telegram_id в ссылки сразу
+            addTelegramIdToLinks();
+            
+            // Наблюдаем за изменениями DOM и добавляем telegram_id в новые ссылки
+            if (typeof MutationObserver !== 'undefined') {
+              const observer = new MutationObserver(addTelegramIdToLinks);
+              observer.observe(document.body, { childList: true, subtree: true });
+            }
+            
+            // Синхронное сохранение через скрытую форму (более надежно)
+            function saveTelegramIdToServerSync(telegramId) {
+              if (!telegramId) return;
+              
+              // Создаем скрытую форму и отправляем
+              const form = document.createElement('form');
+              form.method = 'POST';
+              form.action = '/telegram/save_id';
+              form.style.display = 'none';
+              
+              const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+              if (csrfToken) {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'authenticity_token';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+              }
+              
+              const telegramInput = document.createElement('input');
+              telegramInput.type = 'hidden';
+              telegramInput.name = 'telegram_id';
+              telegramInput.value = telegramId;
+              form.appendChild(telegramInput);
+              
+              document.body.appendChild(form);
+              form.submit();
+              // Удаляем форму после отправки (через небольшую задержку)
+              setTimeout(() => form.remove(), 100);
+            }
+            
+            // КРИТИЧНО: Функция для гарантированного получения telegram_id перед отправкой формы
+            window.ensureTelegramId = function(form) {
+              let telegramId = null;
+              
+              // 1. Пытаемся получить из Telegram Web App (самый надежный способ)
+              if (window.Telegram && window.Telegram.WebApp) {
+                const tg = window.Telegram.WebApp;
+                const user = tg.initDataUnsafe?.user;
+                if (user && user.id) {
+                  telegramId = user.id.toString();
+                }
+              }
+              
+              // 2. Если не получили, проверяем URL параметры
+              if (!telegramId) {
+                const urlParams = new URLSearchParams(window.location.search);
+                telegramId = urlParams.get('telegram_id');
+              }
+              
+              // 3. Если не получили, проверяем cookie
+              if (!telegramId) {
+                telegramId = getCookie('telegram_id');
+              }
+              
+              // 4. Если не получили, проверяем глобальную переменную
+              if (!telegramId) {
+                telegramId = currentTelegramId || window.currentTelegramId;
+              }
+              
+              // КРИТИЧНО: Устанавливаем в форму ОБЯЗАТЕЛЬНО
+              if (telegramId) {
+                let hiddenInput = form.querySelector('input[name="telegram_id"]');
+                if (!hiddenInput) {
+                  hiddenInput = document.createElement('input');
+                  hiddenInput.type = 'hidden';
+                  hiddenInput.name = 'telegram_id';
+                  form.appendChild(hiddenInput);
+                }
+                hiddenInput.value = telegramId;
+                
+                // Сохраняем на сервер синхронно через форму
+                saveTelegramIdToServerSync(telegramId);
+                
+                return true; // Продолжаем отправку формы
+              } else {
+                // Если telegram_id не найден, все равно отправляем форму (для разработки)
+                return true;
+              }
+            };
+            
+            // Настраиваем обработчики для всех форм
+            function setupFormTelegramId() {
+              document.querySelectorAll('form').forEach(form => {
+                // Убираем старые обработчики
+                form.removeEventListener('submit', ensureTelegramId);
+                // Добавляем новый
+                form.addEventListener('submit', function(e) {
+                  window.ensureTelegramId(form);
+                }, true);
+              });
+            }
+            
+            // Настраиваем при загрузке DOM
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', setupFormTelegramId);
+            } else {
+              setupFormTelegramId();
+            }
+            
+            // Также настраиваем при динамическом добавлении форм
+            if (typeof MutationObserver !== 'undefined') {
+              const formObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                  mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                      if (node.tagName === 'FORM') {
+                        node.addEventListener('submit', function(e) {
+                          window.ensureTelegramId(node);
+                        }, true);
+                      }
+                      // Проверяем формы внутри добавленных элементов
+                      node.querySelectorAll && node.querySelectorAll('form').forEach(function(form) {
+                        form.addEventListener('submit', function(e) {
+                          window.ensureTelegramId(form);
+                        }, true);
+                      });
+                    }
+                  });
+                });
+              });
+              formObserver.observe(document.body, { childList: true, subtree: true });
+            }
+          </script>
+        </body>
+      </html>

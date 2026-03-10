@@ -1,0 +1,18 @@
+source 'https://rubygems.org'
+
+ruby '~> 3.0'
+
+gem 'telegram-bot-ruby', '~> 0.19'
+gem 'pg', '~> 1.5'
+gem 'activerecord', '~> 7.0'
+gem 'dotenv', '~> 2.8'
+gem 'rake', '~> 13.0'
+gem 'rufus-scheduler', '~> 3.9'
+
+group :test do
+  gem 'rspec', '~> 3.12'
+  gem 'rspec-mocks', '~> 3.12'
+  gem 'database_cleaner-active_record', '~> 2.2'
+  gem 'factory_bot', '~> 6.2'
+end
+

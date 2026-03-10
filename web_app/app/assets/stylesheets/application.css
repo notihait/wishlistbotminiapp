@@ -1,0 +1,638 @@
+/*
+ * This is a manifest file that'll be compiled into application.css, which will include all the files
+ * listed below.
+ *
+ * Any CSS (and SCSS, if configured) file within this directory, lib/assets/stylesheets, or any plugin's
+ * vendor/assets/stylesheets directory can be referenced here using a relative path.
+ *
+ * For more information, see: https://guides.rubyonrails.org/asset_pipeline.html
+ */
+
+:root {
+  --neon-purple: #a855f7;
+  --neon-pink: #ec4899;
+  --dark-purple: #1a0b2e;
+  --darker-purple: #0f0519;
+  --purple-glow: #9333ea;
+  --accent-purple: #7c3aed;
+  --text-glow: rgba(168, 85, 247, 0.8);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ОСНОВНОЙ ФОН И ТЕКСТ - ВСЕГДА СВЕТЛЫЙ ТЕКСТ НА ТЕМНОМ ФОНЕ */
+body {
+  background: linear-gradient(135deg, var(--darker-purple) 0%, var(--dark-purple) 50%, #2d1b4e 100%);
+  background-attachment: fixed;
+  color: #ffffff !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+/* ВСЕ ТЕКСТЫ БЕЛЫЕ ПО УМОЛЧАНИЮ */
+body * {
+  color: #ffffff !important;
+}
+
+p, span, div, h1, h2, h3, h4, h5, h6, li, td, th, label, small, strong, em {
+  color: #ffffff !important;
+}
+
+/* Неоновые эффекты */
+.neon-text {
+  color: var(--neon-purple);
+  text-shadow: 
+    0 0 10px var(--neon-purple),
+    0 0 20px var(--neon-purple),
+    0 0 30px var(--purple-glow);
+}
+
+.neon-border {
+  border: 2px solid var(--neon-purple);
+  box-shadow: 
+    0 0 10px var(--neon-purple),
+    inset 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.neon-glow {
+  box-shadow: 
+    0 0 20px rgba(168, 85, 247, 0.5),
+    0 0 40px rgba(168, 85, 247, 0.3),
+    0 0 60px rgba(168, 85, 247, 0.1);
+}
+
+/* Карточки - ТЕМНЫЕ */
+.card {
+  background: rgba(15, 5, 25, 0.95) !important;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  border-color: var(--neon-purple);
+  box-shadow: 
+    0 0 20px rgba(168, 85, 247, 0.4),
+    0 0 40px rgba(168, 85, 247, 0.2);
+  transform: translateY(-5px);
+}
+
+.card-header {
+  background: linear-gradient(135deg, var(--accent-purple), var(--neon-pink)) !important;
+  border-bottom: 2px solid var(--neon-purple);
+  color: #ffffff !important;
+}
+
+.card-header * {
+  color: #ffffff !important;
+}
+
+.card-body {
+  background: rgba(15, 5, 25, 0.95) !important;
+  color: #ffffff !important;
+}
+
+.card-body * {
+  color: #ffffff !important;
+}
+
+/* Убираем белый фон у всех элементов внутри карточек */
+.card-body p,
+.card-body div,
+.card-body span,
+.card-body label,
+.card-body .form-text,
+.card-body .mb-4,
+.card-body .form-label,
+.card-body .form-group,
+.card-body .d-grid,
+.card-body .d-md-flex {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Убираем белый фон у контейнеров форм */
+.container,
+.container-fluid,
+.row,
+.col,
+.col-lg-8,
+.col-md-6,
+.col-12 {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.card-title {
+  color: #ffffff !important;
+}
+
+/* Кнопки */
+.btn-primary {
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+  border: none;
+  color: white !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
+  box-shadow: 
+    0 0 30px rgba(168, 85, 247, 0.6),
+    0 0 50px rgba(168, 85, 247, 0.4);
+  transform: scale(1.05);
+  color: white !important;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  color: white !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.btn-success:hover {
+  box-shadow: 
+    0 0 30px rgba(16, 185, 129, 0.6),
+    0 0 50px rgba(16, 185, 129, 0.4);
+  transform: scale(1.05);
+  color: white !important;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff !important;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: #ffffff !important;
+}
+
+.btn-outline-primary {
+  border: 2px solid var(--neon-purple);
+  color: var(--neon-purple) !important;
+  background: transparent;
+}
+
+.btn-outline-primary:hover {
+  background: var(--neon-purple);
+  color: white !important;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+}
+
+.btn-outline-secondary {
+  border: 2px solid rgba(168, 85, 247, 0.5);
+  color: #ffffff !important;
+  background: transparent;
+}
+
+.btn-outline-secondary:hover {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--neon-purple);
+  color: #ffffff !important;
+}
+
+.btn-outline-danger {
+  border: 2px solid #ef4444;
+  color: #ef4444 !important;
+  background: transparent;
+}
+
+.btn-outline-danger:hover {
+  background: #ef4444;
+  color: white !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+}
+
+.btn-light {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff !important;
+}
+
+.btn-light:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: #ffffff !important;
+}
+
+.btn-link {
+  color: #ffffff !important;
+}
+
+.btn-link:hover {
+  color: var(--neon-pink) !important;
+}
+
+/* ФОРМЫ - ТЕМНЫЕ ПОЛЯ С БЕЛЫМ ТЕКСТОМ (КРИТИЧНО!) */
+.form-control,
+input[type="text"],
+input[type="date"],
+input[type="number"],
+input[type="url"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+textarea,
+select {
+  background: rgba(15, 5, 25, 0.95) !important;
+  border: 2px solid rgba(168, 85, 247, 0.5) !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.form-control:focus,
+input[type="text"]:focus,
+input[type="date"]:focus,
+input[type="number"]:focus,
+input[type="url"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="tel"]:focus,
+textarea:focus,
+select:focus {
+  background: rgba(15, 5, 25, 1) !important;
+  border-color: var(--neon-purple) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 
+    0 0 15px rgba(168, 85, 247, 0.6),
+    inset 0 0 10px rgba(168, 85, 247, 0.2) !important;
+  outline: none;
+}
+
+.form-control::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+  opacity: 1;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px rgba(15, 5, 25, 0.95) inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+.form-label,
+label {
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.form-text {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+select option {
+  background: var(--dark-purple) !important;
+  color: #ffffff !important;
+}
+
+/* Заголовки */
+h1, h2, h3, h4, h5, h6 {
+  color: #ffffff !important;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+
+.display-5 {
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  text-shadow: none;
+}
+
+/* Алерты */
+.alert-success {
+  background: rgba(16, 185, 129, 0.2);
+  border: 2px solid #10b981;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.alert-success * {
+  color: #ffffff !important;
+}
+
+.alert-danger {
+  background: rgba(239, 68, 68, 0.2);
+  border: 2px solid #ef4444;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.alert-danger * {
+  color: #ffffff !important;
+}
+
+.alert-info {
+  background: rgba(59, 130, 246, 0.2);
+  border: 2px solid #3b82f6;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.alert-info * {
+  color: #ffffff !important;
+}
+
+/* Бейджи */
+.badge {
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+  color: #ffffff !important;
+}
+
+/* Ссылки */
+a {
+  color: var(--neon-purple);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+a:hover {
+  color: var(--neon-pink);
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.8);
+}
+
+/* Изображения */
+.card-img-top {
+  border-bottom: 2px solid rgba(168, 85, 247, 0.3);
+}
+
+/* Текст */
+.text-muted {
+  color: #ffffff !important;
+  opacity: 0.9;
+}
+
+.card-text {
+  color: #ffffff !important;
+}
+
+.text-success {
+  color: #10b981 !important;
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.text-danger {
+  color: #ef4444 !important;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.text-white {
+  color: #ffffff !important;
+}
+
+/* Анимация пульсации для иконок */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Градиентный фон для пустых состояний */
+.empty-state-icon {
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.5));
+}
+
+/* Скроллбар */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--darker-purple);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
+}
+
+/* Переопределение Bootstrap */
+.bg-primary {
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink)) !important;
+}
+
+.text-primary {
+  color: var(--neon-purple) !important;
+}
+
+/* Кнопки закрытия */
+.btn-close-white {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Анимация для пульсации */
+@keyframes neonPulse {
+  0%, 100% {
+    text-shadow: 
+      0 0 10px var(--neon-purple),
+      0 0 20px var(--neon-purple),
+      0 0 30px var(--purple-glow);
+  }
+  50% {
+    text-shadow: 
+      0 0 20px var(--neon-purple),
+      0 0 30px var(--neon-purple),
+      0 0 40px var(--purple-glow),
+      0 0 50px var(--neon-pink);
+  }
+}
+
+.neon-text.pulse {
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+/* Мобильная адаптация */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .card {
+    margin-bottom: 1rem;
+  }
+  
+  .card-header h2 {
+    font-size: 1.25rem;
+  }
+  
+  .btn {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .btn-lg {
+    font-size: 1rem;
+    padding: 0.75rem 1.5rem;
+  }
+  
+  .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .display-5 {
+    font-size: 2rem;
+  }
+  
+  h1, h2, h3 {
+    font-size: 1.5rem;
+  }
+  
+  .card-img-top {
+    height: 200px !important;
+  }
+  
+  .empty-state-icon {
+    font-size: 3rem !important;
+  }
+  
+  .btn-group {
+    flex-wrap: wrap;
+  }
+  
+  .btn-group .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  
+  .d-flex.justify-content-between {
+    flex-wrap: wrap;
+  }
+  
+  .text-md-end {
+    text-align: left !important;
+  }
+  
+  .row.g-4 {
+    --bs-gutter-y: 1rem;
+  }
+  
+  .card-body {
+    padding: 1rem;
+  }
+  
+  .card-header {
+    padding: 0.75rem 1rem;
+  }
+  
+  .neon-glow {
+    box-shadow: 
+      0 0 15px rgba(168, 85, 247, 0.4),
+      0 0 30px rgba(168, 85, 247, 0.2);
+  }
+  
+  /* Формы на мобильных */
+  .form-control {
+    font-size: 16px; /* Предотвращает зум на iOS */
+    color: #ffffff !important;
+  }
+  
+  input, textarea, select {
+    font-size: 16px !important;
+    color: #ffffff !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .container-fluid {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.5rem;
+  }
+  
+  .card-header .d-flex {
+    width: 100%;
+  }
+  
+  .btn-group {
+    width: 100%;
+  }
+  
+  .btn-group .btn {
+    flex: 1;
+  }
+  
+  .col-lg-4,
+  .col-md-6 {
+    margin-bottom: 1rem;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    word-break: break-word;
+  }
+  
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+/* Touch-friendly элементы на мобильных */
+@media (hover: none) and (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .card:hover {
+    transform: none;
+  }
+  
+  .hover-card:hover {
+    transform: none;
+  }
+}
+
+/* Дополнительные переопределения для читаемости */
+ul, ol, li {
+  color: #ffffff !important;
+}
+
+table, th, td {
+  color: #ffffff !important;
+}

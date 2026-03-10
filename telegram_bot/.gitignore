@@ -1,0 +1,8 @@
+.env
+*.log
+*.pid
+*.swp
+*.swo
+*~
+.DS_Store
+
