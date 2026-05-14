@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+
     <title><%= content_for(:title) || "Wishlist" %></title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,7 +10,11 @@
 
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
+
     <%= yield :head %>
+
+    <!-- Telegram Mini App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <!-- Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -23,7 +28,7 @@
 
   <body class="app-body">
 
-    <!-- Top bar (Apple style) -->
+    <!-- Topbar -->
     <header class="topbar">
       <div class="container d-flex justify-content-between align-items-center py-3">
         <div class="brand">Wishlist</div>
@@ -31,11 +36,44 @@
       </div>
     </header>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
     <main class="container py-4">
       <%= yield %>
     </main>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const tg = window.Telegram?.WebApp
+
+        if (!tg) return
+
+        tg.ready()
+
+        const userId = tg.initDataUnsafe?.user?.id
+
+        console.log("Telegram user:", userId)
+
+        if (!userId) return
+
+        try {
+          await fetch("/telegram/save_id", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": document.querySelector(
+                'meta[name="csrf-token"]'
+              ).content
+            },
+            body: JSON.stringify({
+              telegram_id: userId
+            })
+          })
+
+          console.log("telegram_id saved")
+        } catch (e) {
+          console.error(e)
+        }
+      })
+    </script>
 
   </body>
 </html>
