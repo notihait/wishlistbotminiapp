@@ -1,25 +1,19 @@
 class ApplicationController < ActionController::Base
-  allow_browser versions: :modern
+  helper_method :current_user, :logged_in?
 
-  before_action :set_telegram_user
+  def current_user
+    @current_user ||= TelegramUser.find_by(id: session[:telegram_user_id])
+  end
 
-  helper_method :current_telegram_id, :wishlist_owner?
+  def logged_in?
+    current_user.present?
+  end
 
-  private
-
-  def set_telegram_user
-    if params[:telegram_id].present?
-      session[:telegram_id] = params[:telegram_id].to_i
-    end
+  def require_login
+    redirect_to root_path unless logged_in?
   end
 
   def current_telegram_id
-    session[:telegram_id]
-  end
-
-  def wishlist_owner?(wishlist)
-    return false if current_telegram_id.blank?
-
-    wishlist.telegram_id == current_telegram_id
+    current_user&.telegram_id
   end
 end
