@@ -11,10 +11,8 @@ class WishlistsController < ApplicationController
 
   def show
     @gifts = @wishlist.gifts.order(created_at: :desc)
-
-    @is_owner = (@wishlist.user_id == current_user.id)
-
-    redirect_to wishlists_path unless @is_owner || params[:public].present?
+  
+    @is_owner = (@wishlist.telegram_id.present? && @wishlist.telegram_id == current_telegram_id)
   end
 
   def new
@@ -60,8 +58,9 @@ class WishlistsController < ApplicationController
   end
 
   def owns?
-    @wishlist.user_id == current_user.id
-  end
+  return false if current_telegram_id.blank?
+  @wishlist.telegram_id == current_telegram_id
+end
 
   def wishlist_params
     params.require(:wishlist).permit(:name, :event_date)

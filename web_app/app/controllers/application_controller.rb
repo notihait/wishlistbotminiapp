@@ -6,6 +6,7 @@ class ApplicationController < ActionController::Base
   end
 
   def wishlist_owner?(wishlist)
-    current_telegram_id.present? && wishlist.telegram_id == current_telegram_id
+    wishlist.telegram_id.present? &&
+      wishlist.telegram_id == current_telegram_id
   end
 end
