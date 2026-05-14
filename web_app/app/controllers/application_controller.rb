@@ -10,9 +10,14 @@ class ApplicationController < ActionController::Base
   end
 
   def require_login
-    redirect_to root_path unless logged_in?
+    return if current_user
+  
+    Rails.logger.debug "NO USER IN SESSION"
+  
+    redirect_to "/login"
   end
 
+  
   def current_telegram_id
     current_user&.telegram_id
   end

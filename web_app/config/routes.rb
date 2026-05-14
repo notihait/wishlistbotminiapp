@@ -1,7 +1,11 @@
 Rails.application.routes.draw do
+
+  get "/login", to: "pages#login"
+  
   root "wishlists#index"
   
   post "telegram/login", to: "telegram_auth#login"
+  
   # Сохранение telegram_id в сессию
   post 'telegram/save_id', to: 'telegram#save_id', as: 'save_telegram_id'
   
