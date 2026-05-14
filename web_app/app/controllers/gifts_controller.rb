@@ -1,64 +1,36 @@
 class GiftsController < ApplicationController
   before_action :set_wishlist
-  before_action :set_gift, only: [:show, :edit, :update, :destroy]
-
-  def index
-    @gifts = @wishlist.gifts.order(created_at: :desc)
-  end
-
-  def show
-  end
+  before_action :check_owner
+  before_action :set_gift, only: [:edit, :update, :destroy]
 
   def new
-    unless wishlist_owner?(@wishlist)
-      redirect_to @wishlist, alert: 'У вас нет прав для добавления подарков в этот вишлист.'
-      return
-    end
     @gift = @wishlist.gifts.build
   end
 
   def create
-    unless wishlist_owner?(@wishlist)
-      redirect_to @wishlist, alert: 'У вас нет прав для добавления подарков в этот вишлист.'
-      return
-    end
-    
     @gift = @wishlist.gifts.build(gift_params)
+
     if @gift.save
-      redirect_to @wishlist, notice: 'Подарок успешно добавлен.'
+      redirect_to @wishlist
     else
-      render :new
+      render :new, status: :unprocessable_entity
     end
   end
 
   def edit
-    unless wishlist_owner?(@wishlist)
-      redirect_to @wishlist, alert: 'У вас нет прав для редактирования подарков в этом вишлисте.'
-      return
-    end
   end
 
   def update
-    unless wishlist_owner?(@wishlist)
-      redirect_to @wishlist, alert: 'У вас нет прав для редактирования подарков в этом вишлисте.'
-      return
-    end
-    
     if @gift.update(gift_params)
-      redirect_to @wishlist, notice: 'Подарок успешно обновлен.'
+      redirect_to @wishlist
     else
-      render :edit
+      render :edit, status: :unprocessable_entity
     end
   end
 
   def destroy
-    unless wishlist_owner?(@wishlist)
-      redirect_to @wishlist, alert: 'У вас нет прав для удаления подарков из этого вишлиста.'
-      return
-    end
-    
     @gift.destroy
-    redirect_to @wishlist, notice: 'Подарок успешно удален.', status: :see_other
+    redirect_to @wishlist
   end
 
   private
@@ -71,7 +43,17 @@ class GiftsController < ApplicationController
     @gift = @wishlist.gifts.find(params[:id])
   end
 
+  def check_owner
+    redirect_to wishlists_path unless wishlist_owner?(@wishlist)
+  end
+
   def gift_params
-    params.require(:gift).permit(:name, :price, :image_url, :link_url, :additional_info)
+    params.require(:gift).permit(
+      :name,
+      :price,
+      :image_url,
+      :link_url,
+      :additional_info
+    )
   end
 end

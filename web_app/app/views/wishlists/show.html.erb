@@ -169,7 +169,7 @@
 <script>
 function shareWishlist(wishlistId) {
   const botUsername = '<%= ENV['BOT_USERNAME'] || 'my_wishlists_bot' %>';
-  const shareUrl = `https://t.me/${botUsername}?start=${wishlistId}`;
+  const shareUrl = `https://t.me/${botUsername}?startapp=wishlist_${wishlistId}`;
   
   if (navigator.share) {
     navigator.share({

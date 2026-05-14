@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wishlist Mini App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .wishlist-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+        
+        .wishlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .wishlist-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .wishlist-date {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .gifts-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .gift-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .gift-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            margin: 50px auto;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Мои Вишлисты</h1>
+        
+        <button onclick="showWishlistForm()" style="margin-bottom: 20px;">+ Создать вишлист</button>
+        
+        <div id="wishlists"></div>
+    </div>
+    
+    <!-- Modal for Wishlist Form -->
+    <div id="wishlistModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('wishlistModal')">&times;</span>
+            <h2 id="modalTitle">Создать вишлист</h2>
+            <form id="wishlistForm">
+                <input type="hidden" id="wishlistId">
+                <div class="form-group">
+                    <label>Название:</label>
+                    <input type="text" id="wishlistName" required>
+                </div>
+                <div class="form-group">
+                    <label>Дата события:</label>
+                    <input type="date" id="wishlistDate" required>
+                </div>
+                <button type="submit">Сохранить</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal for Gift Form -->
+    <div id="giftModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('giftModal')">&times;</span>
+            <h2>Добавить подарок</h2>
+            <form id="giftForm" enctype="multipart/form-data">
+                <input type="hidden" id="giftWishlistId">
+                <input type="hidden" id="giftId">
+                <div class="form-group">
+                    <label>Название:</label>
+                    <input type="text" id="giftName" required>
+                </div>
+                <div class="form-group">
+                    <label>Цена:</label>
+                    <input type="number" step="0.01" id="giftPrice">
+                </div>
+                <div class="form-group">
+                    <label>Ссылка:</label>
+                    <input type="url" id="giftLink">
+                </div>
+                <div class="form-group">
+                    <label>Изображение:</label>
+                    <input type="file" id="giftImage" accept="image/*">
+                </div>
+                <div class="form-group">
+                    <label>Дополнительная информация:</label>
+                    <textarea id="giftInfo" rows="3"></textarea>
+                </div>
+                <button type="submit">Сохранить</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let currentWishlistId = null;
+        
+        // Load wishlists on page load
+        window.onload = () => {
+            loadWishlists();
+        };
+        
+        // Load all wishlists
+        async function loadWishlists() {
+            try {
+                const response = await fetch('/api/wishlists');
+                const wishlists = await response.json();
+                displayWishlists(wishlists);
+            } catch (error) {
+                console.error('Error loading wishlists:', error);
+            }
+        }
+        
+        // Display wishlists
+        async function displayWishlists(wishlists) {
+            const container = document.getElementById('wishlists');
+            container.innerHTML = '';
+            
+            for (const wishlist of wishlists) {
+                const wishlistDiv = document.createElement('div');
+                wishlistDiv.className = 'wishlist-item';
+                
+                const date = new Date(wishlist.event_date).toLocaleDateString('ru-RU');
+                
+                wishlistDiv.innerHTML = `
+                    <div class="wishlist-header">
+                        <div>
+                            <div class="wishlist-name">${wishlist.name}</div>
+                            <div class="wishlist-date">📅 ${date}</div>
+                        </div>
+                        <div>
+                            <button onclick="editWishlist(${wishlist.id}, '${wishlist.name}', '${wishlist.event_date}')">Редактировать</button>
+                            <button class="btn-danger" onclick="deleteWishlist(${wishlist.id})">Удалить</button>
+                        </div>
+                    </div>
+                    <div class="gifts-section">
+                        <h3>Подарки</h3>
+                        <button onclick="showGiftForm(${wishlist.id})">+ Добавить подарок</button>
+                        <div id="gifts-${wishlist.id}"></div>
+                    </div>
+                `;
+                
+                container.appendChild(wishlistDiv);
+                loadGifts(wishlist.id);
+            }
+        }
+        
+        // Load gifts for a wishlist
+        async function loadGifts(wishlistId) {
+            try {
+                const response = await fetch(`/api/gifts/wishlist/${wishlistId}`);
+                const gifts = await response.json();
+                displayGifts(wishlistId, gifts);
+            } catch (error) {
+                console.error('Error loading gifts:', error);
+            }
+        }
+        
+        // Display gifts
+        function displayGifts(wishlistId, gifts) {
+            const container = document.getElementById(`gifts-${wishlistId}`);
+            container.innerHTML = '';
+            
+            if (gifts.length === 0) {
+                container.innerHTML = '<p style="color: #999; margin-top: 10px;">Подарков пока нет</p>';
+                return;
+            }
+            
+            gifts.forEach(gift => {
+                const giftDiv = document.createElement('div');
+                giftDiv.className = 'gift-item';
+                
+                let imageHtml = '';
+                if (gift.image_url) {
+                    imageHtml = `<img src="${gift.image_url}" alt="${gift.name}" class="gift-image">`;
+                }
+                
+                giftDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div style="flex: 1;">
+                            <strong>${gift.name}</strong>
+                            ${gift.price ? `<div>💰 ${gift.price} руб.</div>` : ''}
+                            ${gift.link_url ? `<div><a href="${gift.link_url}" target="_blank">🔗 Ссылка</a></div>` : ''}
+                            ${gift.additional_info ? `<div style="margin-top: 5px; color: #666;">${gift.additional_info}</div>` : ''}
+                            ${imageHtml}
+                        </div>
+                        <div>
+                            <button onclick="editGift(${gift.id}, ${wishlistId})">✏️</button>
+                            <button class="btn-danger" onclick="deleteGift(${gift.id}, ${wishlistId})">🗑️</button>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(giftDiv);
+            });
+        }
+        
+        // Show wishlist form
+        function showWishlistForm() {
+            document.getElementById('wishlistId').value = '';
+            document.getElementById('wishlistName').value = '';
+            document.getElementById('wishlistDate').value = '';
+            document.getElementById('modalTitle').textContent = 'Создать вишлист';
+            document.getElementById('wishlistModal').style.display = 'block';
+        }
+        
+        // Edit wishlist
+        function editWishlist(id, name, date) {
+            document.getElementById('wishlistId').value = id;
+            document.getElementById('wishlistName').value = name;
+            document.getElementById('wishlistDate').value = date;
+            document.getElementById('modalTitle').textContent = 'Редактировать вишлист';
+            document.getElementById('wishlistModal').style.display = 'block';
+        }
+        
+        // Show gift form
+        function showGiftForm(wishlistId) {
+            currentWishlistId = wishlistId;
+            document.getElementById('giftWishlistId').value = wishlistId;
+            document.getElementById('giftId').value = '';
+            document.getElementById('giftName').value = '';
+            document.getElementById('giftPrice').value = '';
+            document.getElementById('giftLink').value = '';
+            document.getElementById('giftInfo').value = '';
+            document.getElementById('giftImage').value = '';
+            document.getElementById('giftModal').style.display = 'block';
+        }
+        
+        // Edit gift
+        async function editGift(giftId, wishlistId) {
+            try {
+                const response = await fetch(`/api/gifts/${giftId}`);
+                const gift = await response.json();
+                
+                currentWishlistId = wishlistId;
+                document.getElementById('giftWishlistId').value = wishlistId;
+                document.getElementById('giftId').value = gift.id;
+                document.getElementById('giftName').value = gift.name;
+                document.getElementById('giftPrice').value = gift.price || '';
+                document.getElementById('giftLink').value = gift.link_url || '';
+                document.getElementById('giftInfo').value = gift.additional_info || '';
+                document.getElementById('giftModal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading gift:', error);
+            }
+        }
+        
+        // Close modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        
+        // Wishlist form submit
+        document.getElementById('wishlistForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('wishlistId').value;
+            const name = document.getElementById('wishlistName').value;
+            const date = document.getElementById('wishlistDate').value;
+            
+            try {
+                const url = id ? `/api/wishlists/${id}` : '/api/wishlists';
+                const method = id ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, event_date: date })
+                });
+                
+                if (response.ok) {
+                    closeModal('wishlistModal');
+                    loadWishlists();
+                }
+            } catch (error) {
+                console.error('Error saving wishlist:', error);
+            }
+        });
+        
+        // Gift form submit
+        document.getElementById('giftForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('wishlist_id', document.getElementById('giftWishlistId').value);
+            formData.append('name', document.getElementById('giftName').value);
+            formData.append('price', document.getElementById('giftPrice').value);
+            formData.append('link_url', document.getElementById('giftLink').value);
+            formData.append('additional_info', document.getElementById('giftInfo').value);
+            
+            const imageFile = document.getElementById('giftImage').files[0];
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+            
+            try {
+                const giftId = document.getElementById('giftId').value;
+                const url = giftId ? `/api/gifts/${giftId}` : '/api/gifts';
+                const method = giftId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    closeModal('giftModal');
+                    loadGifts(currentWishlistId);
+                    loadWishlists();
+                }
+            } catch (error) {
+                console.error('Error saving gift:', error);
+            }
+        });
+        
+        // Delete wishlist
+        async function deleteWishlist(id) {
+            if (!confirm('Удалить вишлист?')) return;
+            
+            try {
+                const response = await fetch(`/api/wishlists/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadWishlists();
+                }
+            } catch (error) {
+                console.error('Error deleting wishlist:', error);
+            }
+        }
+        
+        // Delete gift
+        async function deleteGift(giftId, wishlistId) {
+            if (!confirm('Удалить подарок?')) return;
+            
+            try {
+                const response = await fetch(`/api/gifts/${giftId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadGifts(wishlistId);
+                }
+            } catch (error) {
+                console.error('Error deleting gift:', error);
+            }
+        }
+        
+        // Close modal on outside click
+        window.onclick = (event) => {
+            const wishlistModal = document.getElementById('wishlistModal');
+            const giftModal = document.getElementById('giftModal');
+            if (event.target === wishlistModal) {
+                wishlistModal.style.display = 'none';
+            }
+            if (event.target === giftModal) {
+                giftModal.style.display = 'none';
+            }
+        };
+    </script>
+</body>
+</html>
+
