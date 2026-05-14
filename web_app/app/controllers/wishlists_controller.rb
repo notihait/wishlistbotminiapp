@@ -2,7 +2,11 @@ class WishlistsController < ApplicationController
   before_action :set_wishlist, only: [:show, :edit, :update, :destroy]
 
   def index
-    @wishlists = current_user ? current_user.wishlists.order(event_date: :asc) : []
+    if current_telegram_id.present?
+      @wishlists = Wishlist.where(telegram_id: current_telegram_id)
+    else
+      @wishlists = []
+    end
   end
 
   def show
@@ -19,7 +23,7 @@ class WishlistsController < ApplicationController
 
   def create
     @wishlist = Wishlist.new(wishlist_params)
-    @wishlist.telegram_id = session[:telegram_user_id]
+    @wishlist.telegram_id = current_telegram_id
   
     if @wishlist.save
       redirect_to @wishlist
@@ -27,6 +31,7 @@ class WishlistsController < ApplicationController
       render :new, status: :unprocessable_entity
     end
   end
+
   def edit
     redirect_to wishlists_path unless owns?
   end
