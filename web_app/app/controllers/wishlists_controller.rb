@@ -2,6 +2,8 @@ class WishlistsController < ApplicationController
   before_action :set_wishlist, only: [:show, :edit, :update, :destroy]
 
   def index
+    Rails.logger.debug "CURRENT TG ID: #{current_telegram_id.inspect}"
+
     if current_telegram_id.present?
       @wishlists = Wishlist
         .where(telegram_id: current_telegram_id)
@@ -16,8 +18,8 @@ class WishlistsController < ApplicationController
 
     @is_owner = wishlist_owner?(@wishlist)
 
-    unless @is_owner || params[:public].present?
-      redirect_to wishlists_path
+    unless @is_owner
+      @is_public_view = true
     end
   end
 
@@ -26,12 +28,28 @@ class WishlistsController < ApplicationController
   end
 
   def create
+    Rails.logger.debug "=== CREATE ==="
+    Rails.logger.debug "PARAMS: #{params.inspect}"
+    Rails.logger.debug "SESSION: #{session.inspect}"
+    Rails.logger.debug "CURRENT TG ID: #{current_telegram_id.inspect}"
+
     @wishlist = Wishlist.new(wishlist_params)
-    @wishlist.telegram_id = current_telegram_id
+
+    telegram_id =
+      params[:telegram_id] ||
+      session[:telegram_id]
+
+    if telegram_id.present?
+      @wishlist.telegram_id = telegram_id.to_i
+    end
+
+    Rails.logger.debug "WISHLIST TG ID: #{@wishlist.telegram_id.inspect}"
 
     if @wishlist.save
       redirect_to @wishlist
     else
+      Rails.logger.debug @wishlist.errors.full_messages
+
       render :new, status: :unprocessable_entity
     end
   end
@@ -71,6 +89,9 @@ class WishlistsController < ApplicationController
   end
 
   def wishlist_params
-    params.require(:wishlist).permit(:name, :event_date)
+    params.require(:wishlist).permit(
+      :name,
+      :event_date
+    )
   end
 end
