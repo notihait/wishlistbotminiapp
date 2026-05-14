@@ -12,9 +12,7 @@ class ApplicationController < ActionController::Base
   def require_login
     return if current_user
   
-    Rails.logger.debug "NO USER IN SESSION"
-  
-    redirect_to "/login"
+    Rails.logger.debug "NO USER YET"
   end
 
   

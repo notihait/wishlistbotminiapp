@@ -1,6 +1,4 @@
 Rails.application.routes.draw do
-
-  get "/login", to: "pages#login"
   
   root "wishlists#index"
   

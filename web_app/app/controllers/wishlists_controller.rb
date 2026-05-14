@@ -1,9 +1,8 @@
 class WishlistsController < ApplicationController
-  before_action :require_login
   before_action :set_wishlist, only: [:show, :edit, :update, :destroy]
 
   def index
-    @wishlists = current_user.wishlists.order(event_date: :asc)
+    @wishlists = current_user ? current_user.wishlists.order(event_date: :asc) : []
   end
 
   def show
