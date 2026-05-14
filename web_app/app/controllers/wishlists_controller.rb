@@ -18,15 +18,15 @@ class WishlistsController < ApplicationController
   end
 
   def create
-    @wishlist = current_user.wishlists.build(wishlist_params)
-
+    @wishlist = Wishlist.new(wishlist_params)
+    @wishlist.telegram_id = session[:telegram_user_id]
+  
     if @wishlist.save
       redirect_to @wishlist
     else
       render :new, status: :unprocessable_entity
     end
   end
-
   def edit
     redirect_to wishlists_path unless owns?
   end
