@@ -1,28 +1,29 @@
 class WishlistsController < ApplicationController
+  before_action :authenticate_telegram_user!
   before_action :set_wishlist, only: [:show, :edit, :update, :destroy]
 
   def index
-    if current_telegram_id.present?
-      @wishlists = Wishlist.where(telegram_id: current_telegram_id)
-    else
-      @wishlists = []
-    end
+    return redirect_to root_path if current_telegram_id.blank?
+
+    @wishlists = Wishlist.where(telegram_id: current_telegram_id)
   end
 
   def show
     @gifts = @wishlist.gifts.order(created_at: :desc)
-  
-    @is_owner = (@wishlist.telegram_id.present? && @wishlist.telegram_id == current_telegram_id)
   end
 
   def new
+    return redirect_to wishlists_path if current_telegram_id.blank?
+
     @wishlist = Wishlist.new
   end
 
   def create
+    return redirect_to wishlists_path if current_telegram_id.blank?
+
     @wishlist = Wishlist.new(wishlist_params)
     @wishlist.telegram_id = current_telegram_id
-  
+
     if @wishlist.save
       redirect_to @wishlist
     else
@@ -58,9 +59,9 @@ class WishlistsController < ApplicationController
   end
 
   def owns?
-  return false if current_telegram_id.blank?
-  @wishlist.telegram_id == current_telegram_id
-end
+    return false if current_telegram_id.blank?
+    @wishlist.telegram_id == current_telegram_id
+  end
 
   def wishlist_params
     params.require(:wishlist).permit(:name, :event_date)

@@ -3,9 +3,8 @@ Rails.application.routes.draw do
   root "wishlists#index"
   
   
-  # Сохранение telegram_id в сессию
-  post 'telegram/save_id', to: 'telegram#save_id', as: 'save_telegram_id'
-  
+  post "/set_telegram_session", to: "telegram_session#create"
+
   resources :wishlists do
     resources :gifts
   end

@@ -1,0 +1,2033 @@
+
+================================================================================
+FILE: export_project.rb
+================================================================================
+output_file = "rb_dump.txt"
+
+ignore_dirs = ["vendor", "node_modules", "tmp", ".git", "log", "storage", "public"]
+
+File.open(output_file, "w") do |out|
+  Dir.glob("**/*.rb").each do |path|
+    next if ignore_dirs.any? { |d| path.include?("/#{d}/") || path.start_with?(d + "/") }
+
+    out.puts "\n" + "=" * 80
+    out.puts "FILE: #{path}"
+    out.puts "=" * 80
+    out.puts File.read(path)
+  end
+end
+
+puts "Done! Saved to #{output_file}"
+
+================================================================================
+FILE: telegram_bot/bot.rb
+================================================================================
+#!/usr/bin/env ruby
+
+require_relative 'config/environment'
+require 'date'
+require 'pg'
+
+Database.connect
+
+require 'telegram/bot'
+require_relative 'lib/reminder_service'
+
+token = ENV['TELEGRAM_BOT_TOKEN']
+web_app_base_url = ENV['WEB_APP_URL'] || 'https://tanna-interungular-unpresumptively.ngrok-free.dev'
+
+# Функция для создания URL мини-аппа с telegram_id
+def web_app_url(user_id = nil, path = '')
+  base = ENV['WEB_APP_URL'] || 'https://tanna-interungular-unpresumptively.ngrok-free.dev'
+  url = base + path
+  if user_id
+    separator = path.include?('?') ? '&' : '?'
+    url += "#{separator}telegram_id=#{user_id}"
+  end
+  url
+end
+
+unless token
+  puts "Error: TELEGRAM_BOT_TOKEN not set in environment"
+  exit 1
+end
+
+Telegram::Bot::Client.run(token) do |bot|
+  reminder_service = ReminderService.new(bot)
+  reminder_service.start
+
+  bot.listen do |message|
+    case message
+    when Telegram::Bot::Types::Message
+      # Защита от неподдерживаемых типов сообщений
+      unless message.text
+        # Игнорируем стикеры, фото, видео и другие неподдерживаемые типы
+        unsupported_types = [
+          message.sticker, message.photo, message.video, message.voice,
+          message.document, message.audio, message.video_note, 
+          message.animation, message.location, message.contact,
+          message.poll, message.dice, message.game
+        ]
+        
+        if unsupported_types.any?
+          bot.api.send_message(
+            chat_id: message.chat.id,
+            text: "😊 Я понимаю только текстовые команды!\n\n💡 Используйте /help для списка команд или откройте миниапп для работы с вишлистами.",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🚀 Открыть миниапп",
+                    web_app: { url: web_app_url(message.from.id) }
+                  }
+                ],
+                [
+                  {
+                    text: "❓ Помощь",
+                    callback_data: "help"
+                  }
+                ]
+              ]
+            }
+          )
+          next
+        end
+        
+        # Если это не текстовое сообщение и не один из известных типов - просто игнорируем
+        next
+      end
+      
+      # Защита от слишком длинных сообщений (защита от спама)
+      if message.text.length > 1000
+        bot.api.send_message(
+          chat_id: message.chat.id,
+          text: "⚠️ Сообщение слишком длинное. Пожалуйста, используйте команды или откройте миниапп.",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🚀 Открыть миниапп",
+                  web_app: { url: web_app_url }
+                }
+              ]
+            ]
+          }
+        )
+        next
+      end
+      
+      case message.text
+      when /^\/start/
+        # Проверяем, есть ли параметр с ID вишлиста в тексте команды
+        start_param = nil
+        if message.text && message.text.include?(' ')
+          parts = message.text.split(' ')
+          start_param = parts[1] if parts.length > 1
+        end
+
+        if start_param && start_param.match?(/^\d+$/)
+          # Показываем публичный вишлист
+          # Ищем вишлист в веб-БД напрямую
+          require 'pg'
+          web_wishlist_id = start_param.to_i
+          
+          # Подключаемся к веб-БД для получения вишлиста
+          web_db = PG.connect(
+            host: ENV.fetch('WEB_DB_HOST', 'localhost'),
+            port: ENV.fetch('WEB_DB_PORT', 5432),
+            dbname: ENV.fetch('WEB_DB_NAME', 'wishlist_web_db'),
+            user: ENV.fetch('WEB_DB_USER', 'postgres'),
+            password: ENV.fetch('WEB_DB_PASSWORD', 'postgres')
+          )
+          
+          result = web_db.exec_params(
+            'SELECT id, name, event_date FROM wishlists WHERE id = $1',
+            [web_wishlist_id]
+          )
+          
+          if result.ntuples > 0
+            wishlist_data = result[0]
+            gifts_result = web_db.exec_params(
+              'SELECT COUNT(*) as count FROM gifts WHERE wishlist_id = $1',
+              [web_wishlist_id]
+            )
+            gifts_count = gifts_result[0]['count'].to_i
+            web_db.close
+          
+            date_str = Date.parse(wishlist_data['event_date']).strftime('%d.%m.%Y')
+            
+            text = "🎁 *Вишлист: #{wishlist_data['name']}*\n\n"
+            text += "📅 Дата события: #{date_str}\n"
+            text += "🎁 Подарков: #{gifts_count}\n\n"
+            text += "💡 Чтобы увидеть все подарки и создать свой вишлист, откройте миниапп!"
+            
+            bot.api.send_message(
+              chat_id: message.chat.id,
+              text: text,
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "🔗 Открыть вишлист в миниаппе",
+                      web_app: { url: web_app_url(message.from.id, "/wishlists/#{web_wishlist_id}") }
+                    }
+                  ],
+                  [
+                    {
+                      text: "📋 Создать свой вишлист",
+                      web_app: { url: web_app_url(message.from.id) }
+                    }
+                  ]
+                ]
+              }
+            )
+          else
+            web_db.close
+            bot.api.send_message(
+              chat_id: message.chat.id,
+              text: "❌ Вишлист не найден. Возможно, ссылка устарела.",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                  {
+                    text: "📋 Создать вишлист",
+                    web_app: { url: web_app_url }
+                  }
+                  ]
+                ]
+              }
+            )
+          end
+        else
+          # Обычное приветствие - создаем или обновляем пользователя
+          begin
+            user = User.find_or_create_by(telegram_id: message.from.id) do |u|
+              u.username = message.from.username
+              u.first_name = message.from.first_name
+              u.last_name = message.from.last_name
+            end
+            
+            # Обновляем данные если они изменились
+            user.update(
+              username: message.from.username,
+              first_name: message.from.first_name,
+              last_name: message.from.last_name
+            )
+          rescue => e
+            puts "Ошибка при создании пользователя: #{e.message}"
+            # Продолжаем работу даже если не удалось создать пользователя
+          end
+          
+          welcome_text = "👋 *Привет, #{message.from.first_name}!*\n\n"
+          welcome_text += "🎉 Я бот для управления вишлистами!\n\n"
+          welcome_text += "✨ *Что я умею:*\n"
+          welcome_text += "• Напоминать о предстоящих событиях\n"
+          welcome_text += "• Показывать вишлисты по ссылке\n"
+          welcome_text += "• Помогать не забыть о важных датах\n\n"
+          welcome_text += "💡 *Совет:* Все вишлисты создаются и управляются через удобную *миниапп*!\n"
+          welcome_text += "Там вы можете:\n"
+          welcome_text += "• Создавать вишлисты с датами\n"
+          welcome_text += "• Добавлять подарки с фото и ссылками\n"
+          welcome_text += "• Делиться вишлистами с друзьями\n\n"
+          welcome_text += "🚀 Откройте миниапп и начните создавать свои вишлисты!"
+
+          bot.api.send_message(
+            chat_id: message.chat.id,
+            text: welcome_text,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🚀 Открыть миниапп",
+                    web_app: { url: web_app_url(message.from.id) }
+                  }
+                ],
+                [
+                  {
+                    text: "❓ Помощь",
+                    callback_data: "help"
+                  }
+                ]
+              ]
+            }
+          )
+        end
+      when '/help'
+        help_text = "📖 *Справка по боту*\n\n"
+        help_text += "🔹 */start* - начать работу с ботом\n"
+        help_text += "🔹 */help* - показать эту справку\n\n"
+        help_text += "📱 *Миниапп*\n"
+        help_text += "Все вишлисты создаются через миниапп. Там вы можете:\n"
+        help_text += "• Создавать вишлисты\n"
+        help_text += "• Добавлять подарки\n"
+        help_text += "• Делиться ссылками\n\n"
+        help_text += "🔔 *Напоминания*\n"
+        help_text += "Бот автоматически напоминает о событиях:\n"
+        help_text += "• За 7 дней до события\n"
+        help_text += "• За 3 дня до события\n"
+        help_text += "• В день события\n\n"
+        help_text += "🔗 *Поделиться вишлистом*\n"
+        help_text += "Используйте кнопку 'Поделиться' в миниаппе, чтобы отправить ссылку друзьям!"
+
+        bot.api.send_message(
+          chat_id: message.chat.id,
+          text: help_text,
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🚀 Открыть миниапп",
+                  web_app: { url: web_app_url }
+                }
+              ]
+            ]
+          }
+        )
+      else
+        bot.api.send_message(
+          chat_id: message.chat.id,
+          text: "🤔 Не понимаю эту команду.\n\nИспользуйте /help для списка команд или откройте миниапп для работы с вишлистами!",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🚀 Открыть миниапп",
+                  web_app: { url: web_app_url }
+                }
+              ]
+            ]
+          }
+        )
+      end
+    when Telegram::Bot::Types::CallbackQuery
+      case message.data
+      when 'help'
+        bot.api.answer_callback_query(callback_query_id: message.id)
+        bot.api.send_message(
+          chat_id: message.from.id,
+          text: "📖 Используйте команду /help для получения справки",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🚀 Открыть миниапп",
+                  web_app: { url: web_app_url }
+                }
+              ]
+            ]
+          }
+        )
+      end
+    end
+  end
+end
+
+================================================================================
+FILE: telegram_bot/config/environment.rb
+================================================================================
+require 'bundler/setup'
+Bundler.require
+
+require 'dotenv'
+Dotenv.load
+
+require_relative '../lib/database'
+require_relative '../lib/models/wishlist'
+require_relative '../lib/models/user'
+
+
+================================================================================
+FILE: telegram_bot/db/migrate/001_create_users.rb
+================================================================================
+class CreateUsers < ActiveRecord::Migration[7.0]
+  def change
+    create_table :users do |t|
+      t.bigint :telegram_id, null: false, index: { unique: true }
+      t.string :username
+      t.string :first_name
+      t.string :last_name
+      t.timestamps
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/db/migrate/002_create_wishlists.rb
+================================================================================
+class CreateWishlists < ActiveRecord::Migration[7.0]
+  def change
+    create_table :wishlists do |t|
+      t.references :user, null: false, foreign_key: true
+      t.string :name, null: false
+      t.date :event_date, null: false
+      t.bigint :web_wishlist_id, index: true
+      t.timestamps
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/db/schema.rb
+================================================================================
+# This file is auto-generated from the current state of the database. Instead
+# of editing this file, please use the migrations feature of Active Record to
+# incrementally modify your database.
+
+ActiveRecord::Schema.define(version: 2) do
+  create_table "users", force: :cascade do |t|
+    t.bigint "telegram_id", null: false
+    t.string "username"
+    t.string "first_name"
+    t.string "last_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["telegram_id"], name: "index_users_on_telegram_id", unique: true
+  end
+
+  create_table "wishlists", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.date "event_date", null: false
+    t.bigint "web_wishlist_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_wishlists_on_user_id"
+    t.index ["web_wishlist_id"], name: "index_wishlists_on_web_wishlist_id"
+  end
+
+  add_foreign_key "wishlists", "users"
+end
+
+
+================================================================================
+FILE: telegram_bot/lib/database.rb
+================================================================================
+require 'active_record'
+require 'dotenv'
+
+Dotenv.load
+
+module Database
+  def self.connect
+    db_url = ENV['DATABASE_URL']
+    
+    if db_url
+      ActiveRecord::Base.establish_connection(db_url)
+    else
+      ActiveRecord::Base.establish_connection(
+        adapter: 'postgresql',
+        host: ENV.fetch('DB_HOST', 'localhost'),
+        port: ENV.fetch('DB_PORT', 5432),
+        database: ENV.fetch('DB_NAME', 'wishlist_web_db'),
+        username: ENV.fetch('DB_USER', 'postgres'),
+        password: ENV.fetch('DB_PASSWORD', 'postgres')
+      )
+      
+      # Очищаем кэш схемы, чтобы ActiveRecord увидел новые таблицы
+      ActiveRecord::Base.connection.schema_cache.clear!
+      ActiveRecord::Base.connection.schema_cache.refresh!
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/lib/models/user.rb
+================================================================================
+class User < ActiveRecord::Base
+  self.table_name = 'telegram_users'
+  has_many :wishlists, foreign_key: :telegram_id, primary_key: :telegram_id
+  validates :telegram_id, presence: true, uniqueness: true
+end
+
+
+================================================================================
+FILE: telegram_bot/lib/models/wishlist.rb
+================================================================================
+class Wishlist < ActiveRecord::Base
+  belongs_to :user, foreign_key: :telegram_id, primary_key: :telegram_id, optional: true
+  validates :name, presence: true
+  validates :event_date, presence: true
+  
+  # Метод для получения подарков из веб-БД
+  def gifts_from_web_db
+    return [] unless self.id
+    
+    require 'pg'
+    web_db = PG.connect(
+      host: ENV.fetch('DB_HOST', 'localhost'),
+      port: ENV.fetch('DB_PORT', 5432),
+      database: ENV.fetch('DB_NAME', 'wishlist_web_db'),
+      user: ENV.fetch('DB_USER', 'postgres'),
+      password: ENV.fetch('DB_PASSWORD', 'postgres')
+    )
+    
+    result = web_db.exec_params(
+      'SELECT name, price, link_url FROM gifts WHERE wishlist_id = $1 ORDER BY created_at DESC LIMIT 5',
+      [self.id]
+    )
+    web_db.close
+    
+    result.to_a
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/lib/reminder_service.rb
+================================================================================
+require 'rufus-scheduler'
+require 'date'
+require 'pg'
+
+class ReminderService
+  def initialize(bot)
+    @bot = bot
+    @scheduler = Rufus::Scheduler.new
+  end
+
+  def start
+    # Проверяем вишлисты каждый день в 9:00
+    @scheduler.cron '0 9 * * *' do
+      check_upcoming_events
+    end
+  end
+
+  def stop
+    @scheduler.shutdown
+  end
+
+  private
+
+  def check_upcoming_events
+    today = Date.today
+    upcoming_date = today + 7
+
+    # Подключаемся к общей БД
+    db = PG.connect(
+      host: ENV.fetch('DB_HOST', 'localhost'),
+      port: ENV.fetch('DB_PORT', 5432),
+      dbname: ENV.fetch('DB_NAME', 'wishlist_web_db'),
+      user: ENV.fetch('DB_USER', 'postgres'),
+      password: ENV.fetch('DB_PASSWORD', 'postgres')
+    )
+
+    # Получаем вишлисты с датами в нужном диапазоне и с telegram_id
+    result = db.exec_params(
+      "SELECT w.id, w.name, w.event_date, w.telegram_id 
+       FROM wishlists w 
+       WHERE w.event_date BETWEEN $1 AND $2 
+       AND w.telegram_id IS NOT NULL",
+      [today, upcoming_date]
+    )
+
+    result.each do |wishlist_data|
+      wishlist_id = wishlist_data['id'].to_i
+      wishlist_name = wishlist_data['name']
+      event_date = Date.parse(wishlist_data['event_date'])
+      telegram_id = wishlist_data['telegram_id'].to_i
+      
+      days_until = (event_date - today).to_i
+      
+      # Получаем подарки для этого вишлиста
+      gifts_result = db.exec_params(
+        'SELECT name, price FROM gifts WHERE wishlist_id = $1 ORDER BY created_at DESC LIMIT 3',
+        [wishlist_id]
+      )
+      
+      gifts = gifts_result.to_a
+      
+      # Формируем сообщение
+      message = build_reminder_message(wishlist_name, event_date, days_until, gifts)
+      
+      if message
+        begin
+          @bot.api.send_message(
+            chat_id: telegram_id,
+            text: message,
+            parse_mode: 'Markdown'
+          )
+        rescue => e
+          puts "Ошибка отправки сообщения пользователю #{telegram_id}: #{e.message}"
+        end
+      end
+    end
+
+    db.close
+  end
+
+  def build_reminder_message(name, event_date, days_until, gifts)
+    date_str = event_date.strftime('%d.%m.%Y')
+    
+    # Формируем основное сообщение
+    if days_until == 0
+      message = "🎉 *Сегодня событие: #{name}!*\n"
+      message += "📅 Дата: #{date_str}\n\n"
+    elsif days_until == 7
+      message = "⏰ *Осталось 7 дней до даты*\n"
+      message += "📅 *#{name}*\n"
+      message += "📆 Дата: #{date_str}\n\n"
+    elsif days_until <= 3
+      days_word = case days_until
+      when 1 then "день"
+      when 2, 3, 4 then "дня"
+      else "дней"
+      end
+      message = "⏰ *Осталось #{days_until} #{days_word} до даты*\n"
+      message += "📅 *#{name}*\n"
+      message += "📆 Дата: #{date_str}\n\n"
+    else
+      return nil
+    end
+    
+    # Добавляем информацию о подарках
+    if gifts.any?
+      message += "🎁 *Вы выбрали подарки:*\n"
+      gifts.each_with_index do |gift, index|
+        gift_name = gift['name']
+        gift_price = gift['price']
+        price_text = gift_price && gift_price.to_f > 0 ? " (#{gift_price.to_f} руб.)" : ""
+        message += "• #{gift_name}#{price_text}\n"
+      end
+      if gifts.size == 3
+        message += "\n💡 И еще подарки... Откройте миниапп чтобы увидеть все!"
+      end
+    else
+      message += "💡 Пока нет подарков в вишлисте. Добавьте их в миниаппе!"
+    end
+    
+    message
+  end
+end
+
+================================================================================
+FILE: telegram_bot/lib/sync_service.rb
+================================================================================
+require 'pg'
+require 'dotenv'
+
+Dotenv.load
+
+# Сервис для синхронизации вишлистов из веб-приложения в бот
+class SyncService
+  def initialize
+    @web_db = PG.connect(
+      host: ENV.fetch('WEB_DB_HOST', 'localhost'),
+      port: ENV.fetch('WEB_DB_PORT', 5432),
+      dbname: ENV.fetch('WEB_DB_NAME', 'wishlist_web_db'),
+      user: ENV.fetch('WEB_DB_USER', 'postgres'),
+      password: ENV.fetch('WEB_DB_PASSWORD', 'postgres')
+    )
+  end
+
+  def sync_wishlist_to_bot(web_wishlist_id, telegram_user_id)
+    # Получаем вишлист из веб-БД
+    result = @web_db.exec_params(
+      'SELECT id, name, event_date FROM wishlists WHERE id = $1',
+      [web_wishlist_id]
+    )
+
+    return nil if result.ntuples == 0
+
+    wishlist_data = result[0]
+    
+    # Создаем или обновляем вишлист в БД бота
+    user = User.find_by(telegram_id: telegram_user_id)
+    return nil unless user
+
+    wishlist = Wishlist.find_or_initialize_by(web_wishlist_id: web_wishlist_id)
+    wishlist.user = user
+    wishlist.name = wishlist_data['name']
+    wishlist.event_date = Date.parse(wishlist_data['event_date'])
+    wishlist.save!
+
+    wishlist
+  end
+
+  def close
+    @web_db.close if @web_db
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/bot_spec.rb
+================================================================================
+require 'spec_helper'
+# Не загружаем bot.rb напрямую, так как он пытается подключиться к Telegram API
+# require_relative '../bot'
+
+RSpec.describe 'Bot Integration' do
+  let(:token) { 'test_token' }
+  let(:bot_instance) { double('Bot') }
+  let(:api) { double('API') }
+
+  before do
+    allow(ENV).to receive(:[]).with('TELEGRAM_BOT_TOKEN').and_return(token)
+    allow(Telegram::Bot::Client).to receive(:run).and_yield(bot_instance)
+    allow(bot_instance).to receive(:api).and_return(api)
+    allow(bot_instance).to receive(:listen).and_yield(message)
+  end
+
+  describe 'command handling' do
+    let(:message) do
+      double('Message',
+        text: '/start',
+        from: double('User', id: 123456789, username: 'testuser', first_name: 'Test', last_name: 'User'),
+        chat: double('Chat', id: 123456789)
+      )
+    end
+
+    it 'handles /start command' do
+      expect(api).to receive(:send_message).with(
+        chat_id: 123456789,
+        text: /Привет, Test!/
+      )
+
+      # Мокируем выполнение бота
+      allow(User).to receive(:find_or_create_by).and_return(double('User'))
+      # Здесь можно добавить более детальное тестирование логики бота
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/factories/users.rb
+================================================================================
+FactoryBot.define do
+  factory :user do
+    telegram_id { rand(100000000..999999999) }
+    username { "user#{rand(1000)}" }
+    first_name { "Test" }
+    last_name { "User" }
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/factories/wishlists.rb
+================================================================================
+FactoryBot.define do
+  factory :wishlist do
+    association :user
+    name { "Test Wishlist #{rand(1000)}" }
+    event_date { Date.today + rand(1..30) }
+    web_wishlist_id { nil }
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/lib/database_spec.rb
+================================================================================
+require 'spec_helper'
+
+RSpec.describe Database do
+  describe '.connect' do
+    it 'establishes database connection' do
+      expect { Database.connect }.not_to raise_error
+      expect(ActiveRecord::Base.connected?).to be true
+    end
+
+    it 'uses DATABASE_URL if available' do
+      allow(ENV).to receive(:[]).with('DATABASE_URL').and_return('postgresql://user:pass@localhost/test')
+      expect(ActiveRecord::Base).to receive(:establish_connection).with('postgresql://user:pass@localhost/test')
+      Database.connect
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/models/user_spec.rb
+================================================================================
+require 'spec_helper'
+
+RSpec.describe User, type: :model do
+  describe 'validations' do
+    it 'requires telegram_id' do
+      user = build(:user, telegram_id: nil)
+      expect(user).not_to be_valid
+      expect(user.errors[:telegram_id]).to include("can't be blank")
+    end
+
+    it 'requires unique telegram_id' do
+      create(:user, telegram_id: 123456789)
+      user2 = build(:user, telegram_id: 123456789)
+      expect(user2).not_to be_valid
+      expect(user2.errors[:telegram_id]).to include("has already been taken")
+    end
+  end
+
+  describe 'associations' do
+    it 'has many wishlists' do
+      user = create(:user)
+      wishlist1 = create(:wishlist, user: user)
+      wishlist2 = create(:wishlist, user: user)
+
+      expect(user.wishlists).to include(wishlist1, wishlist2)
+    end
+
+    it 'destroys wishlists when user is destroyed' do
+      user = create(:user)
+      create(:wishlist, user: user)
+
+      expect { user.destroy }.to change { Wishlist.count }.by(-1)
+    end
+  end
+
+  describe '.find_or_create_by_telegram_id' do
+    it 'finds existing user' do
+      user = create(:user, telegram_id: 123456789)
+      found = User.find_or_create_by(telegram_id: 123456789)
+      expect(found.id).to eq(user.id)
+    end
+
+    it 'creates new user if not found' do
+      expect {
+        User.find_or_create_by(telegram_id: 987654321) do |u|
+          u.username = 'newuser'
+          u.first_name = 'New'
+          u.last_name = 'User'
+        end
+      }.to change { User.count }.by(1)
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/models/wishlist_spec.rb
+================================================================================
+require 'spec_helper'
+
+RSpec.describe Wishlist, type: :model do
+  describe 'validations' do
+    it 'requires name' do
+      wishlist = build(:wishlist, name: nil)
+      expect(wishlist).not_to be_valid
+      expect(wishlist.errors[:name]).to include("can't be blank")
+    end
+
+    it 'requires event_date' do
+      wishlist = build(:wishlist, event_date: nil)
+      expect(wishlist).not_to be_valid
+      expect(wishlist.errors[:event_date]).to include("can't be blank")
+    end
+  end
+
+  describe 'associations' do
+    it 'belongs to user' do
+      user = create(:user)
+      wishlist = create(:wishlist, user: user)
+      expect(wishlist.user).to eq(user)
+    end
+  end
+
+  describe 'scopes' do
+    it 'can find wishlists by date range' do
+      user = create(:user)
+      today = Date.today
+      past_wishlist = create(:wishlist, user: user, event_date: today - 5.days)
+      today_wishlist = create(:wishlist, user: user, event_date: today)
+      future_wishlist = create(:wishlist, user: user, event_date: today + 5.days)
+
+      upcoming = Wishlist.where(event_date: today..(today + 7))
+      expect(upcoming).to include(today_wishlist, future_wishlist)
+      expect(upcoming).not_to include(past_wishlist)
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/services/reminder_service_spec.rb
+================================================================================
+require 'spec_helper'
+require_relative '../../lib/reminder_service'
+
+RSpec.describe ReminderService do
+  let(:bot) { double('Bot', api: double('API')) }
+  let(:service) { ReminderService.new(bot) }
+  let(:user) { create(:user, telegram_id: 123456789) }
+
+  describe '#initialize' do
+    it 'creates a scheduler' do
+      expect(service.instance_variable_get(:@scheduler)).to be_a(Rufus::Scheduler)
+    end
+  end
+
+  describe '#start' do
+    it 'schedules daily check' do
+      scheduler = service.instance_variable_get(:@scheduler)
+      expect(scheduler).to receive(:cron).with('0 9 * * *')
+      service.start
+    end
+  end
+
+  describe '#check_upcoming_events' do
+    before do
+      allow(bot.api).to receive(:send_message)
+    end
+
+    context 'when event is today' do
+      it 'sends reminder message' do
+        wishlist = create(:wishlist, user: user, event_date: Date.today)
+        
+        expect(bot.api).to receive(:send_message).with(
+          chat_id: user.telegram_id,
+          text: "🎉 Сегодня событие: #{wishlist.name}!"
+        )
+        
+        service.send(:check_upcoming_events)
+      end
+    end
+
+    context 'when event is in 7 days' do
+      it 'sends reminder message' do
+        wishlist = create(:wishlist, user: user, event_date: Date.today + 7)
+        
+        expect(bot.api).to receive(:send_message).with(
+          chat_id: user.telegram_id,
+          text: "📅 Через неделю: #{wishlist.name} (#{wishlist.event_date.strftime('%d.%m.%Y')})"
+        )
+        
+        service.send(:check_upcoming_events)
+      end
+    end
+
+    context 'when event is in 3 days' do
+      it 'sends reminder message' do
+        wishlist = create(:wishlist, user: user, event_date: Date.today + 3)
+        
+        expect(bot.api).to receive(:send_message).with(
+          chat_id: user.telegram_id,
+          text: "⏰ Через 3 дня: #{wishlist.name} (#{wishlist.event_date.strftime('%d.%m.%Y')})"
+        )
+        
+        service.send(:check_upcoming_events)
+      end
+    end
+
+    context 'when event is in 1 day' do
+      it 'sends reminder message with correct grammar' do
+        wishlist = create(:wishlist, user: user, event_date: Date.today + 1)
+        
+        expect(bot.api).to receive(:send_message).with(
+          chat_id: user.telegram_id,
+          text: "⏰ Через 1 день: #{wishlist.name} (#{wishlist.event_date.strftime('%d.%m.%Y')})"
+        )
+        
+        service.send(:check_upcoming_events)
+      end
+    end
+
+    context 'when event is more than 7 days away' do
+      it 'does not send reminder' do
+        create(:wishlist, user: user, event_date: Date.today + 10)
+        
+        expect(bot.api).not_to receive(:send_message)
+        service.send(:check_upcoming_events)
+      end
+    end
+
+    context 'when event is in the past' do
+      it 'does not send reminder' do
+        create(:wishlist, user: user, event_date: Date.today - 1)
+        
+        expect(bot.api).not_to receive(:send_message)
+        service.send(:check_upcoming_events)
+      end
+    end
+
+    context 'with multiple users' do
+      it 'sends reminders to all relevant users' do
+        user2 = create(:user, telegram_id: 987654321)
+        wishlist1 = create(:wishlist, user: user, event_date: Date.today)
+        wishlist2 = create(:wishlist, user: user2, event_date: Date.today + 3)
+        
+        expect(bot.api).to receive(:send_message).with(
+          chat_id: user.telegram_id,
+          text: "🎉 Сегодня событие: #{wishlist1.name}!"
+        )
+        expect(bot.api).to receive(:send_message).with(
+          chat_id: user2.telegram_id,
+          text: "⏰ Через 3 дня: #{wishlist2.name} (#{wishlist2.event_date.strftime('%d.%m.%Y')})"
+        )
+        
+        service.send(:check_upcoming_events)
+      end
+    end
+  end
+
+  describe '#stop' do
+    it 'shuts down scheduler' do
+      scheduler = service.instance_variable_get(:@scheduler)
+      expect(scheduler).to receive(:shutdown)
+      service.stop
+    end
+  end
+end
+
+
+================================================================================
+FILE: telegram_bot/spec/spec_helper.rb
+================================================================================
+require 'bundler/setup'
+Bundler.require(:default, :test)
+
+require 'dotenv'
+Dotenv.load('.env.test', '.env')
+
+require_relative '../config/environment'
+require 'database_cleaner/active_record'
+require 'factory_bot'
+
+# Загружаем фабрики
+Dir[File.join(__dir__, 'factories', '*.rb')].each { |f| require f }
+
+# Подключаемся к БД перед тестами
+Database.connect
+
+RSpec.configure do |config|
+  config.include FactoryBot::Syntax::Methods
+
+  config.before(:suite) do
+    DatabaseCleaner.strategy = :transaction
+    DatabaseCleaner.clean_with(:truncation)
+  end
+
+  config.around(:each) do |example|
+    DatabaseCleaner.cleaning do
+      example.run
+    end
+  end
+
+  config.expect_with :rspec do |expectations|
+    expectations.include_chain_clauses_in_custom_matcher_descriptions = true
+  end
+
+  config.mock_with :rspec do |mocks|
+    mocks.verify_partial_doubles = true
+  end
+
+  config.shared_context_metadata_behavior = :apply_to_host_groups
+  config.filter_run_when_matching :focus
+  config.example_status_persistence_file_path = 'spec/examples.txt'
+  config.disable_monkey_patching!
+  config.warnings = true
+
+  if config.files_to_run.one?
+    config.default_formatter = 'doc'
+  end
+
+  config.profile_examples = 10
+  config.order = :random
+  Kernel.srand config.seed
+end
+
+
+================================================================================
+FILE: web_app/app/controllers/application_controller.rb
+================================================================================
+class ApplicationController < ActionController::Base
+  helper_method :current_telegram_id, :wishlist_owner?
+
+  def current_telegram_id
+    params[:telegram_id].presence&.to_i
+  end
+
+  def wishlist_owner?(wishlist)
+    wishlist.telegram_id.present? &&
+      wishlist.telegram_id == current_telegram_id
+  end
+end
+
+================================================================================
+FILE: web_app/app/controllers/gifts_controller.rb
+================================================================================
+class GiftsController < ApplicationController
+  before_action :set_wishlist
+  before_action :check_owner
+  before_action :set_gift, only: [:edit, :update, :destroy]
+
+  def new
+    @gift = @wishlist.gifts.build
+  end
+
+  def create
+    @gift = @wishlist.gifts.build(gift_params)
+
+    if @gift.save
+      redirect_to @wishlist
+    else
+      render :new, status: :unprocessable_entity
+    end
+  end
+
+  def edit
+  end
+
+  def update
+    if @gift.update(gift_params)
+      redirect_to @wishlist
+    else
+      render :edit, status: :unprocessable_entity
+    end
+  end
+
+  def destroy
+    @gift.destroy
+    redirect_to @wishlist
+  end
+
+  private
+
+  def set_wishlist
+    @wishlist = Wishlist.find(params[:wishlist_id])
+  end
+
+  def set_gift
+    @gift = @wishlist.gifts.find(params[:id])
+  end
+
+  def check_owner
+    redirect_to wishlists_path unless wishlist_owner?(@wishlist)
+  end
+
+  def gift_params
+    params.require(:gift).permit(
+      :name,
+      :price,
+      :image_url,
+      :link_url,
+      :additional_info
+    )
+  end
+end
+
+================================================================================
+FILE: web_app/app/controllers/telegram_controller.rb
+================================================================================
+class TelegramController < ApplicationController
+  skip_before_action :verify_authenticity_token, only: [:save_id]
+  
+  # Метод extract_telegram_id_from_init_data наследуется от ApplicationController
+  
+  # Сохраняем telegram_id в сессию при загрузке страницы
+  def save_id
+    telegram_id =
+      request.request_parameters["telegram_id"] ||
+      current_user
+    telegram_id = telegram_id.to_s.strip
+  
+    if telegram_id.match?(/^\d+$/) && telegram_id.to_i > 0
+      telegram_id_int = telegram_id.to_i
+  
+      session[:telegram_id] = telegram_id_int
+      cookies.permanent[:telegram_id] = {
+        value: telegram_id_int.to_s,
+        httponly: false
+      }
+  
+      Rails.logger.debug "TG ID saved: #{telegram_id_int}"
+  
+      render json: { status: "ok", telegram_id: telegram_id_int }
+    else
+      render json: { status: "error" }, status: :bad_request
+    end
+  end
+end
+
+
+================================================================================
+FILE: web_app/app/controllers/wishlists_controller.rb
+================================================================================
+class WishlistsController < ApplicationController
+  before_action :set_wishlist, only: [:show, :edit, :update, :destroy]
+
+  def index
+    if current_telegram_id.present?
+      @wishlists = Wishlist.where(telegram_id: current_telegram_id)
+    else
+      @wishlists = []
+    end
+  end
+
+  def show
+    @gifts = @wishlist.gifts.order(created_at: :desc)
+  
+    @is_owner = (@wishlist.telegram_id.present? && @wishlist.telegram_id == current_telegram_id)
+  end
+
+  def new
+    @wishlist = Wishlist.new
+  end
+
+  def create
+    @wishlist = Wishlist.new(wishlist_params)
+    @wishlist.telegram_id = current_telegram_id
+  
+    if @wishlist.save
+      redirect_to @wishlist
+    else
+      render :new, status: :unprocessable_entity
+    end
+  end
+
+  def edit
+    redirect_to wishlists_path unless owns?
+  end
+
+  def update
+    return redirect_to wishlists_path unless owns?
+
+    if @wishlist.update(wishlist_params)
+      redirect_to @wishlist
+    else
+      render :edit, status: :unprocessable_entity
+    end
+  end
+
+  def destroy
+    return redirect_to wishlists_path unless owns?
+
+    @wishlist.destroy
+    redirect_to wishlists_path
+  end
+
+  private
+
+  def set_wishlist
+    @wishlist = Wishlist.find(params[:id])
+  end
+
+  def owns?
+  return false if current_telegram_id.blank?
+  @wishlist.telegram_id == current_telegram_id
+end
+
+  def wishlist_params
+    params.require(:wishlist).permit(:name, :event_date)
+  end
+end
+
+================================================================================
+FILE: web_app/app/helpers/application_helper.rb
+================================================================================
+module ApplicationHelper
+  def pluralize(count, one, few, many)
+    case count % 100
+    when 11..14
+      many
+    else
+      case count % 10
+      when 1
+        one
+      when 2..4
+        few
+      else
+        many
+      end
+    end
+  end
+end
+
+================================================================================
+FILE: web_app/app/helpers/gifts_helper.rb
+================================================================================
+module GiftsHelper
+end
+
+================================================================================
+FILE: web_app/app/helpers/wishlists_helper.rb
+================================================================================
+module WishlistsHelper
+end
+
+================================================================================
+FILE: web_app/app/jobs/application_job.rb
+================================================================================
+class ApplicationJob < ActiveJob::Base
+  # Automatically retry jobs that encountered a deadlock
+  # retry_on ActiveRecord::Deadlocked
+
+  # Most jobs are safe to ignore if the underlying records are no longer available
+  # discard_on ActiveJob::DeserializationError
+end
+
+================================================================================
+FILE: web_app/app/mailers/application_mailer.rb
+================================================================================
+class ApplicationMailer < ActionMailer::Base
+  default from: "from@example.com"
+  layout "mailer"
+end
+
+================================================================================
+FILE: web_app/app/models/application_record.rb
+================================================================================
+class ApplicationRecord < ActiveRecord::Base
+  primary_abstract_class
+end
+
+================================================================================
+FILE: web_app/app/models/gift.rb
+================================================================================
+class Gift < ApplicationRecord
+  belongs_to :wishlist
+end
+
+================================================================================
+FILE: web_app/app/models/telegram_user.rb
+================================================================================
+class TelegramUser < ApplicationRecord
+  has_many :wishlists, foreign_key: :telegram_id, primary_key: :telegram_id, dependent: :destroy
+  validates :telegram_id, presence: true, uniqueness: true
+end
+
+================================================================================
+FILE: web_app/app/models/wishlist.rb
+================================================================================
+class Wishlist < ApplicationRecord
+  has_many :gifts, dependent: :destroy
+  belongs_to :telegram_user, optional: true, foreign_key: :telegram_id, primary_key: :telegram_id
+  validates :name, presence: true
+  validates :event_date, presence: true
+end
+
+================================================================================
+FILE: web_app/config/application.rb
+================================================================================
+require_relative "boot"
+
+require "rails"
+# Pick the frameworks you want:
+require "active_model/railtie"
+require "active_job/railtie"
+require "active_record/railtie"
+require "active_storage/engine"
+require "action_controller/railtie"
+require "action_mailer/railtie"
+require "action_mailbox/engine"
+require "action_text/engine"
+require "action_view/railtie"
+require "action_cable/engine"
+# require "rails/test_unit/railtie"
+
+# Require the gems listed in Gemfile, including any gems
+# you've limited to :test, :development, or :production.
+Bundler.require(*Rails.groups)
+
+module WebApp
+  class Application < Rails::Application
+    # Initialize configuration defaults for originally generated Rails version.
+    config.load_defaults 8.0
+
+    # Please, add to the `ignore` list any other `lib` subdirectories that do
+    # not contain `.rb` files, or that should not be reloaded or eager loaded.
+    # Common ones are `templates`, `generators`, or `middleware`, for example.
+    config.autoload_lib(ignore: %w[assets tasks])
+
+    # Configuration for the application, engines, and railties goes here.
+    #
+    # These settings can be overridden in specific environments using the files
+    # in config/environments, which are processed later.
+    #
+    # config.time_zone = "Central Time (US & Canada)"
+    # config.eager_load_paths << Rails.root.join("extras")
+
+    # Don't generate system test files.
+    config.generators.system_tests = nil
+  end
+end
+
+================================================================================
+FILE: web_app/config/boot.rb
+================================================================================
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
+
+require "bundler/setup" # Set up gems listed in the Gemfile.
+require "bootsnap/setup" # Speed up boot time by caching expensive operations.
+
+================================================================================
+FILE: web_app/config/environment.rb
+================================================================================
+# Load the Rails application.
+require_relative "application"
+
+# Initialize the Rails application.
+Rails.application.initialize!
+
+================================================================================
+FILE: web_app/config/environments/development.rb
+================================================================================
+require "active_support/core_ext/integer/time"
+
+Rails.application.configure do
+  # Settings specified here will take precedence over those in config/application.rb.
+
+  # Make code changes take effect immediately without server restart.
+  config.enable_reloading = true
+
+  # Do not eager load code on boot.
+  config.eager_load = false
+
+  # Show full error reports.
+  config.consider_all_requests_local = true
+
+  # Enable server timing.
+  config.server_timing = true
+
+  # Enable/disable Action Controller caching. By default Action Controller caching is disabled.
+  # Run rails dev:cache to toggle Action Controller caching.
+  if Rails.root.join("tmp/caching-dev.txt").exist?
+    config.action_controller.perform_caching = true
+    config.action_controller.enable_fragment_cache_logging = true
+    config.public_file_server.headers = { "cache-control" => "public, max-age=#{2.days.to_i}" }
+  else
+    config.action_controller.perform_caching = false
+  end
+
+  # Change to :null_store to avoid any caching.
+  config.cache_store = :memory_store
+
+  # Store uploaded files on the local file system (see config/storage.yml for options).
+  config.active_storage.service = :local
+
+  # Don't care if the mailer can't send.
+  config.action_mailer.raise_delivery_errors = false
+
+  # Make template changes take effect immediately.
+  config.action_mailer.perform_caching = false
+
+  # Set localhost to be used by links generated in mailer templates.
+  config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
+
+  # Print deprecation notices to the Rails logger.
+  config.active_support.deprecation = :log
+
+  # Raise an error on page load if there are pending migrations.
+  config.active_record.migration_error = :page_load
+
+  # Highlight code that triggered database queries in logs.
+  config.active_record.verbose_query_logs = true
+
+  # Allow ngrok hosts
+  config.hosts << "tanna-interungular-unpresumptively.ngrok-free.dev"
+  config.hosts << /.*\.ngrok-free\.dev/
+  config.hosts << /.*\.ngrok\.io/
+
+  # Append comments with runtime information tags to SQL queries in logs.
+  config.active_record.query_log_tags_enabled = true
+
+  # Highlight code that enqueued background job in logs.
+  config.active_job.verbose_enqueue_logs = true
+
+  # Raises error for missing translations.
+  # config.i18n.raise_on_missing_translations = true
+
+  # Annotate rendered view with file names.
+  config.action_view.annotate_rendered_view_with_filenames = true
+
+  # Uncomment if you wish to allow Action Cable access from any origin.
+  # config.action_cable.disable_request_forgery_protection = true
+
+  # Raise error when a before_action's only/except options reference missing actions.
+  config.action_controller.raise_on_missing_callback_actions = true
+
+  # Apply autocorrection by RuboCop to files generated by `bin/rails generate`.
+  # config.generators.apply_rubocop_autocorrect_after_generate!
+end
+
+================================================================================
+FILE: web_app/config/environments/production.rb
+================================================================================
+require "active_support/core_ext/integer/time"
+
+Rails.application.configure do
+  # Settings specified here will take precedence over those in config/application.rb.
+
+  # Code is not reloaded between requests.
+  config.enable_reloading = false
+
+  # Eager load code on boot for better performance and memory savings (ignored by Rake tasks).
+  config.eager_load = true
+
+  # Full error reports are disabled.
+  config.consider_all_requests_local = false
+
+  # Turn on fragment caching in view templates.
+  config.action_controller.perform_caching = true
+
+  # Cache assets for far-future expiry since they are all digest stamped.
+  config.public_file_server.headers = { "cache-control" => "public, max-age=#{1.year.to_i}" }
+
+  # Enable serving of images, stylesheets, and JavaScripts from an asset server.
+  # config.asset_host = "http://assets.example.com"
+
+  # Store uploaded files on the local file system (see config/storage.yml for options).
+  config.active_storage.service = :local
+
+  # Assume all access to the app is happening through a SSL-terminating reverse proxy.
+  config.assume_ssl = true
+
+  # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
+  config.force_ssl = true
+
+  # Skip http-to-https redirect for the default health check endpoint.
+  # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
+
+  # Log to STDOUT with the current request id as a default log tag.
+  config.log_tags = [ :request_id ]
+  config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)
+
+  # Change to "debug" to log everything (including potentially personally-identifiable information!)
+  config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
+
+  # Prevent health checks from clogging up the logs.
+  config.silence_healthcheck_path = "/up"
+
+  # Don't log any deprecations.
+  config.active_support.report_deprecations = false
+
+  # Replace the default in-process memory cache store with a durable alternative.
+  config.cache_store = :solid_cache_store
+
+  # Replace the default in-process and non-durable queuing backend for Active Job.
+  config.active_job.queue_adapter = :solid_queue
+  config.solid_queue.connects_to = { database: { writing: :queue } }
+
+  # Ignore bad email addresses and do not raise email delivery errors.
+  # Set this to true and configure the email server for immediate delivery to raise delivery errors.
+  # config.action_mailer.raise_delivery_errors = false
+
+  # Set host to be used by links generated in mailer templates.
+  config.action_mailer.default_url_options = { host: "example.com" }
+
+  # Specify outgoing SMTP server. Remember to add smtp/* credentials via rails credentials:edit.
+  # config.action_mailer.smtp_settings = {
+  #   user_name: Rails.application.credentials.dig(:smtp, :user_name),
+  #   password: Rails.application.credentials.dig(:smtp, :password),
+  #   address: "smtp.example.com",
+  #   port: 587,
+  #   authentication: :plain
+  # }
+
+  # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
+  # the I18n.default_locale when a translation cannot be found).
+  config.i18n.fallbacks = true
+
+  # Do not dump schema after migrations.
+  config.active_record.dump_schema_after_migration = false
+
+  # Only use :id for inspections in production.
+  config.active_record.attributes_for_inspect = [ :id ]
+
+  # Enable DNS rebinding protection and other `Host` header attacks.
+  # config.hosts = [
+  #   "example.com",     # Allow requests from example.com
+  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
+  # ]
+  #
+  # Skip DNS rebinding protection for the default health check endpoint.
+  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+end
+
+================================================================================
+FILE: web_app/config/environments/test.rb
+================================================================================
+# The test environment is used exclusively to run your application's
+# test suite. You never need to work with it otherwise. Remember that
+# your test database is "scratch space" for the test suite and is wiped
+# and recreated between test runs. Don't rely on the data there!
+
+Rails.application.configure do
+  # Settings specified here will take precedence over those in config/application.rb.
+
+  # While tests run files are not watched, reloading is not necessary.
+  config.enable_reloading = false
+
+  # Eager loading loads your entire application. When running a single test locally,
+  # this is usually not necessary, and can slow down your test suite. However, it's
+  # recommended that you enable it in continuous integration systems to ensure eager
+  # loading is working properly before deploying your code.
+  config.eager_load = ENV["CI"].present?
+
+  # Configure public file server for tests with cache-control for performance.
+  config.public_file_server.headers = { "cache-control" => "public, max-age=3600" }
+
+  # Show full error reports.
+  config.consider_all_requests_local = true
+  config.cache_store = :null_store
+
+  # Render exception templates for rescuable exceptions and raise for other exceptions.
+  config.action_dispatch.show_exceptions = :rescuable
+
+  # Disable request forgery protection in test environment.
+  config.action_controller.allow_forgery_protection = false
+
+  # Store uploaded files on the local file system in a temporary directory.
+  config.active_storage.service = :test
+
+  # Tell Action Mailer not to deliver emails to the real world.
+  # The :test delivery method accumulates sent emails in the
+  # ActionMailer::Base.deliveries array.
+  config.action_mailer.delivery_method = :test
+
+  # Set host to be used by links generated in mailer templates.
+  config.action_mailer.default_url_options = { host: "example.com" }
+
+  # Print deprecation notices to the stderr.
+  config.active_support.deprecation = :stderr
+
+  # Raises error for missing translations.
+  # config.i18n.raise_on_missing_translations = true
+
+  # Annotate rendered view with file names.
+  # config.action_view.annotate_rendered_view_with_filenames = true
+
+  # Raise error when a before_action's only/except options reference missing actions.
+  config.action_controller.raise_on_missing_callback_actions = true
+end
+
+================================================================================
+FILE: web_app/config/importmap.rb
+================================================================================
+# Pin npm packages by running ./bin/importmap
+
+pin "application"
+pin "@hotwired/turbo-rails", to: "turbo.min.js"
+pin "@hotwired/stimulus", to: "stimulus.min.js"
+pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
+pin_all_from "app/javascript/controllers", under: "controllers"
+
+================================================================================
+FILE: web_app/config/initializers/assets.rb
+================================================================================
+# Be sure to restart your server when you modify this file.
+
+# Version of your assets, change this if you want to expire all your assets.
+Rails.application.config.assets.version = "1.0"
+
+# Add additional assets to the asset load path.
+# Rails.application.config.assets.paths << Emoji.images_path
+
+================================================================================
+FILE: web_app/config/initializers/content_security_policy.rb
+================================================================================
+# Be sure to restart your server when you modify this file.
+
+# Define an application-wide content security policy.
+# See the Securing Rails Applications Guide for more information:
+# https://guides.rubyonrails.org/security.html#content-security-policy-header
+
+# Rails.application.configure do
+#   config.content_security_policy do |policy|
+#     policy.default_src :self, :https
+#     policy.font_src    :self, :https, :data
+#     policy.img_src     :self, :https, :data
+#     policy.object_src  :none
+#     policy.script_src  :self, :https
+#     policy.style_src   :self, :https
+#     # Specify URI for violation reports
+#     # policy.report_uri "/csp-violation-report-endpoint"
+#   end
+#
+#   # Generate session nonces for permitted importmap, inline scripts, and inline styles.
+#   config.content_security_policy_nonce_generator = ->(request) { request.session.id.to_s }
+#   config.content_security_policy_nonce_directives = %w(script-src style-src)
+#
+#   # Report violations without enforcing the policy.
+#   # config.content_security_policy_report_only = true
+# end
+
+================================================================================
+FILE: web_app/config/initializers/filter_parameter_logging.rb
+================================================================================
+# Be sure to restart your server when you modify this file.
+
+# Configure parameters to be partially matched (e.g. passw matches password) and filtered from the log file.
+# Use this to limit dissemination of sensitive information.
+# See the ActiveSupport::ParameterFilter documentation for supported notations and behaviors.
+Rails.application.config.filter_parameters += [
+  :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc
+]
+
+================================================================================
+FILE: web_app/config/initializers/inflections.rb
+================================================================================
+# Be sure to restart your server when you modify this file.
+
+# Add new inflection rules using the following format. Inflections
+# are locale specific, and you may define rules for as many different
+# locales as you wish. All of these examples are active by default:
+# ActiveSupport::Inflector.inflections(:en) do |inflect|
+#   inflect.plural /^(ox)$/i, "\\1en"
+#   inflect.singular /^(ox)en/i, "\\1"
+#   inflect.irregular "person", "people"
+#   inflect.uncountable %w( fish sheep )
+# end
+
+# These inflection rules are supported but not enabled by default:
+# ActiveSupport::Inflector.inflections(:en) do |inflect|
+#   inflect.acronym "RESTful"
+# end
+
+================================================================================
+FILE: web_app/config/puma.rb
+================================================================================
+# This configuration file will be evaluated by Puma. The top-level methods that
+# are invoked here are part of Puma's configuration DSL. For more information
+# about methods provided by the DSL, see https://puma.io/puma/Puma/DSL.html.
+#
+# Puma starts a configurable number of processes (workers) and each process
+# serves each request in a thread from an internal thread pool.
+#
+# You can control the number of workers using ENV["WEB_CONCURRENCY"]. You
+# should only set this value when you want to run 2 or more workers. The
+# default is already 1.
+#
+# The ideal number of threads per worker depends both on how much time the
+# application spends waiting for IO operations and on how much you wish to
+# prioritize throughput over latency.
+#
+# As a rule of thumb, increasing the number of threads will increase how much
+# traffic a given process can handle (throughput), but due to CRuby's
+# Global VM Lock (GVL) it has diminishing returns and will degrade the
+# response time (latency) of the application.
+#
+# The default is set to 3 threads as it's deemed a decent compromise between
+# throughput and latency for the average Rails application.
+#
+# Any libraries that use a connection pool or another resource pool should
+# be configured to provide at least as many connections as the number of
+# threads. This includes Active Record's `pool` parameter in `database.yml`.
+threads_count = ENV.fetch("RAILS_MAX_THREADS", 3)
+threads threads_count, threads_count
+
+# Specifies the `port` that Puma will listen on to receive requests; default is 3000.
+port ENV.fetch("PORT", 3000)
+
+# Allow puma to be restarted by `bin/rails restart` command.
+plugin :tmp_restart
+
+# Run the Solid Queue supervisor inside of Puma for single-server deployments
+plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"]
+
+# Specify the PID file. Defaults to tmp/pids/server.pid in development.
+# In other environments, only set the PID file if requested.
+pidfile ENV["PIDFILE"] if ENV["PIDFILE"]
+
+================================================================================
+FILE: web_app/config/routes.rb
+================================================================================
+Rails.application.routes.draw do
+  
+  root "wishlists#index"
+  
+  
+  # Сохранение telegram_id в сессию
+  post 'telegram/save_id', to: 'telegram#save_id', as: 'save_telegram_id'
+  
+  resources :wishlists do
+    resources :gifts
+  end
+  
+  get "up" => "rails/health#show", as: :rails_health_check
+end
+
+================================================================================
+FILE: web_app/db/cable_schema.rb
+================================================================================
+ActiveRecord::Schema[7.1].define(version: 1) do
+  create_table "solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", limit: 1024, null: false
+    t.binary "payload", limit: 536870912, null: false
+    t.datetime "created_at", null: false
+    t.integer "channel_hash", limit: 8, null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+end
+
+================================================================================
+FILE: web_app/db/cache_schema.rb
+================================================================================
+ActiveRecord::Schema[7.2].define(version: 1) do
+  create_table "solid_cache_entries", force: :cascade do |t|
+    t.binary "key", limit: 1024, null: false
+    t.binary "value", limit: 536870912, null: false
+    t.datetime "created_at", null: false
+    t.integer "key_hash", limit: 8, null: false
+    t.integer "byte_size", limit: 4, null: false
+    t.index ["byte_size"], name: "index_solid_cache_entries_on_byte_size"
+    t.index ["key_hash", "byte_size"], name: "index_solid_cache_entries_on_key_hash_and_byte_size"
+    t.index ["key_hash"], name: "index_solid_cache_entries_on_key_hash", unique: true
+  end
+end
+
+================================================================================
+FILE: web_app/db/migrate/20260310104815_create_wishlists.rb
+================================================================================
+class CreateWishlists < ActiveRecord::Migration[8.0]
+  def change
+    create_table :wishlists do |t|
+      t.string :name
+      t.date :event_date
+
+      t.timestamps
+    end
+  end
+end
+
+================================================================================
+FILE: web_app/db/migrate/20260310104817_create_gifts.rb
+================================================================================
+class CreateGifts < ActiveRecord::Migration[8.0]
+  def change
+    create_table :gifts do |t|
+      t.references :wishlist, null: false, foreign_key: true
+      t.string :name
+      t.decimal :price
+      t.string :image_url
+      t.string :link_url
+      t.text :additional_info
+
+      t.timestamps
+    end
+  end
+end
+
+================================================================================
+FILE: web_app/db/migrate/20260310112245_add_telegram_id_to_wishlists.rb
+================================================================================
+class AddTelegramIdToWishlists < ActiveRecord::Migration[8.0]
+  def change
+    add_column :wishlists, :telegram_id, :bigint
+    add_index :wishlists, :telegram_id
+  end
+end
+
+================================================================================
+FILE: web_app/db/migrate/20260310112248_create_telegram_users.rb
+================================================================================
+class CreateTelegramUsers < ActiveRecord::Migration[8.0]
+  def change
+    create_table :telegram_users do |t|
+      t.bigint :telegram_id
+      t.string :username
+      t.string :first_name
+      t.string :last_name
+
+      t.timestamps
+    end
+    add_index :telegram_users, :telegram_id, unique: true
+  end
+end
+
+================================================================================
+FILE: web_app/db/queue_schema.rb
+================================================================================
+ActiveRecord::Schema[7.1].define(version: 1) do
+  create_table "solid_queue_blocked_executions", force: :cascade do |t|
+    t.bigint "job_id", null: false
+    t.string "queue_name", null: false
+    t.integer "priority", default: 0, null: false
+    t.string "concurrency_key", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.index [ "concurrency_key", "priority", "job_id" ], name: "index_solid_queue_blocked_executions_for_release"
+    t.index [ "expires_at", "concurrency_key" ], name: "index_solid_queue_blocked_executions_for_maintenance"
+    t.index [ "job_id" ], name: "index_solid_queue_blocked_executions_on_job_id", unique: true
+  end
+
+  create_table "solid_queue_claimed_executions", force: :cascade do |t|
+    t.bigint "job_id", null: false
+    t.bigint "process_id"
+    t.datetime "created_at", null: false
+    t.index [ "job_id" ], name: "index_solid_queue_claimed_executions_on_job_id", unique: true
+    t.index [ "process_id", "job_id" ], name: "index_solid_queue_claimed_executions_on_process_id_and_job_id"
+  end
+
+  create_table "solid_queue_failed_executions", force: :cascade do |t|
+    t.bigint "job_id", null: false
+    t.text "error"
+    t.datetime "created_at", null: false
+    t.index [ "job_id" ], name: "index_solid_queue_failed_executions_on_job_id", unique: true
+  end
+
+  create_table "solid_queue_jobs", force: :cascade do |t|
+    t.string "queue_name", null: false
+    t.string "class_name", null: false
+    t.text "arguments"
+    t.integer "priority", default: 0, null: false
+    t.string "active_job_id"
+    t.datetime "scheduled_at"
+    t.datetime "finished_at"
+    t.string "concurrency_key"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "active_job_id" ], name: "index_solid_queue_jobs_on_active_job_id"
+    t.index [ "class_name" ], name: "index_solid_queue_jobs_on_class_name"
+    t.index [ "finished_at" ], name: "index_solid_queue_jobs_on_finished_at"
+    t.index [ "queue_name", "finished_at" ], name: "index_solid_queue_jobs_for_filtering"
+    t.index [ "scheduled_at", "finished_at" ], name: "index_solid_queue_jobs_for_alerting"
+  end
+
+  create_table "solid_queue_pauses", force: :cascade do |t|
+    t.string "queue_name", null: false
+    t.datetime "created_at", null: false
+    t.index [ "queue_name" ], name: "index_solid_queue_pauses_on_queue_name", unique: true
+  end
+
+  create_table "solid_queue_processes", force: :cascade do |t|
+    t.string "kind", null: false
+    t.datetime "last_heartbeat_at", null: false
+    t.bigint "supervisor_id"
+    t.integer "pid", null: false
+    t.string "hostname"
+    t.text "metadata"
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.index [ "last_heartbeat_at" ], name: "index_solid_queue_processes_on_last_heartbeat_at"
+    t.index [ "name", "supervisor_id" ], name: "index_solid_queue_processes_on_name_and_supervisor_id", unique: true
+    t.index [ "supervisor_id" ], name: "index_solid_queue_processes_on_supervisor_id"
+  end
+
+  create_table "solid_queue_ready_executions", force: :cascade do |t|
+    t.bigint "job_id", null: false
+    t.string "queue_name", null: false
+    t.integer "priority", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.index [ "job_id" ], name: "index_solid_queue_ready_executions_on_job_id", unique: true
+    t.index [ "priority", "job_id" ], name: "index_solid_queue_poll_all"
+    t.index [ "queue_name", "priority", "job_id" ], name: "index_solid_queue_poll_by_queue"
+  end
+
+  create_table "solid_queue_recurring_executions", force: :cascade do |t|
+    t.bigint "job_id", null: false
+    t.string "task_key", null: false
+    t.datetime "run_at", null: false
+    t.datetime "created_at", null: false
+    t.index [ "job_id" ], name: "index_solid_queue_recurring_executions_on_job_id", unique: true
+    t.index [ "task_key", "run_at" ], name: "index_solid_queue_recurring_executions_on_task_key_and_run_at", unique: true
+  end
+
+  create_table "solid_queue_recurring_tasks", force: :cascade do |t|
+    t.string "key", null: false
+    t.string "schedule", null: false
+    t.string "command", limit: 2048
+    t.string "class_name"
+    t.text "arguments"
+    t.string "queue_name"
+    t.integer "priority", default: 0
+    t.boolean "static", default: true, null: false
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "key" ], name: "index_solid_queue_recurring_tasks_on_key", unique: true
+    t.index [ "static" ], name: "index_solid_queue_recurring_tasks_on_static"
+  end
+
+  create_table "solid_queue_scheduled_executions", force: :cascade do |t|
+    t.bigint "job_id", null: false
+    t.string "queue_name", null: false
+    t.integer "priority", default: 0, null: false
+    t.datetime "scheduled_at", null: false
+    t.datetime "created_at", null: false
+    t.index [ "job_id" ], name: "index_solid_queue_scheduled_executions_on_job_id", unique: true
+    t.index [ "scheduled_at", "priority", "job_id" ], name: "index_solid_queue_dispatch_all"
+  end
+
+  create_table "solid_queue_semaphores", force: :cascade do |t|
+    t.string "key", null: false
+    t.integer "value", default: 1, null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "expires_at" ], name: "index_solid_queue_semaphores_on_expires_at"
+    t.index [ "key", "value" ], name: "index_solid_queue_semaphores_on_key_and_value"
+    t.index [ "key" ], name: "index_solid_queue_semaphores_on_key", unique: true
+  end
+
+  add_foreign_key "solid_queue_blocked_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "solid_queue_claimed_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "solid_queue_failed_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+end
+
+================================================================================
+FILE: web_app/db/schema.rb
+================================================================================
+# This file is auto-generated from the current state of the database. Instead
+# of editing this file, please use the migrations feature of Active Record to
+# incrementally modify your database, and then regenerate this schema definition.
+#
+# This file is the source Rails uses to define your schema when running `bin/rails
+# db:schema:load`. When creating a new database, `bin/rails db:schema:load` tends to
+# be faster and is potentially less error prone than running all of your
+# migrations from scratch. Old migrations may fail to apply correctly if those
+# migrations use external dependencies or application code.
+#
+# It's strongly recommended that you check this file into your version control system.
+
+ActiveRecord::Schema[8.0].define(version: 2026_03_10_112248) do
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
+
+  create_table "gifts", id: :serial, force: :cascade do |t|
+    t.integer "wishlist_id", null: false
+    t.string "name", limit: 255, null: false
+    t.decimal "price", precision: 10, scale: 2
+    t.string "image_url", limit: 500
+    t.string "link_url", limit: 500
+    t.text "additional_info"
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.index ["wishlist_id"], name: "idx_gifts_wishlist_id"
+  end
+
+  create_table "telegram_users", force: :cascade do |t|
+    t.bigint "telegram_id"
+    t.string "username"
+    t.string "first_name"
+    t.string "last_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["telegram_id"], name: "index_telegram_users_on_telegram_id", unique: true
+  end
+
+  create_table "wishlists", id: :serial, force: :cascade do |t|
+    t.string "name", limit: 255, null: false
+    t.date "event_date", null: false
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.bigint "telegram_id"
+    t.index ["telegram_id"], name: "index_wishlists_on_telegram_id"
+  end
+
+  add_foreign_key "gifts", "wishlists", name: "gifts_wishlist_id_fkey", on_delete: :cascade
+end
+
+================================================================================
+FILE: web_app/db/seeds.rb
+================================================================================
+# This file should ensure the existence of records required to run the application in every environment (production,
+# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
+# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
+#
+# Example:
+#
+#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
+#     MovieGenre.find_or_create_by!(name: genre_name)
+#   end
