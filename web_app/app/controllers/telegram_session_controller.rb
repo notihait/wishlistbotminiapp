@@ -9,21 +9,38 @@ class TelegramSessionController < ApplicationController
   
       if telegram_id.present?
         session[:telegram_id] = telegram_id
-        render json: { ok: true, telegram_id: telegram_id }
+  
+        render json: {
+          ok: true,
+          telegram_id: telegram_id
+        }
       else
-        render json: { ok: false }, status: :unauthorized
+        render json: {
+          ok: false,
+          error: "cannot extract telegram_id"
+        }, status: :unauthorized
       end
     end
   
     private
   
     def extract_telegram_id_from_init_data(init_data)
-      parsed = CGI.parse(init_data)
-      user_json = parsed["user"]&.first
-      return nil if user_json.blank?
+      # Telegram initData = query string format
+      # user=%7B...json...%7D&auth_date=...&hash=...
   
-      JSON.parse(user_json)["id"].to_i
-    rescue
+      parsed = CGI.parse(init_data)
+  
+      user_param = parsed["user"]&.first
+      return nil unless user_param
+  
+      # decode URL-encoded JSON
+      user_json = CGI.unescape(user_param)
+  
+      data = JSON.parse(user_json)
+  
+      data["id"]
+    rescue => e
+      Rails.logger.error("Telegram initData parse error: #{e.message}")
       nil
     end
   end
