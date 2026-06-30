@@ -3,8 +3,8 @@ class TelegramSessionController < ApplicationController
   
     def create
 
-        Rails.logger.info("SET SESSION HIT")
-Rails.logger.info("INIT: #{params[:initData]}")
+        Rails.logger.info("=== SET SESSION HIT ===")
+Rails.logger.info("INIT DATA: #{params[:initData]}")
 
         init_data = params[:initData]
       
