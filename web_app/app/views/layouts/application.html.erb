@@ -55,9 +55,7 @@
     <script>
   const tg = window.Telegram?.WebApp;
 
-  console.log("Telegram object:", tg);
-  console.log("initData:", tg?.initData);
-  console.log("user:", tg?.initDataUnsafe?.user);
+  alert("initData: " + (window.Telegram?.WebApp?.initData || "EMPTY")
 </script>
 
     <header class="topbar">
