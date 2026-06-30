@@ -52,6 +52,14 @@
       })();
     </script>
 
+    <script>
+  const tg = window.Telegram?.WebApp;
+
+  console.log("Telegram object:", tg);
+  console.log("initData:", tg?.initData);
+  console.log("user:", tg?.initDataUnsafe?.user);
+</script>
+
     <header class="topbar">
       <div class="container d-flex justify-content-between align-items-center py-3">
         <div class="brand">Wishlist</div>
@@ -64,4 +72,6 @@
     </main>
 
   </body>
-</html>
+</html>console.log(Telegram.WebApp.initData)
+Uncaught ReferenceError: Telegram is not defined
+    <anonymous> debugger eval code:1
