@@ -2,6 +2,10 @@ class TelegramSessionController < ApplicationController
     skip_before_action :verify_authenticity_token
   
     def create
+
+        Rails.logger.info("SET SESSION HIT")
+Rails.logger.info("INIT: #{params[:initData]}")
+
         init_data = params[:initData]
       
         Rails.logger.info("INIT_DATA: #{init_data}")
